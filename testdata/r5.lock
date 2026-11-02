@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "fhirVersion": "5.0.0",
+  "core": "hl7.fhir.r5.core#5.0.0",
+  "roots": [
+    "hl7.fhir.r5.core#5.0.0",
+    "hl7.fhir.uv.extensions.r5#5.2.0",
+    "hl7.terminology.r5#7.0.1"
+  ],
+  "packages": [
+    {
+      "name": "hl7.fhir.r5.core",
+      "version": "5.0.0",
+      "sha256": "74b27cd1bfce9e80eaceac431edf230b0945a443564fbf5512f82e5fa50a80d4",
+      "fhirVersions": [
+        "5.0.0"
+      ]
+    },
+    {
+      "name": "hl7.fhir.uv.extensions.r5",
+      "version": "5.2.0",
+      "sha256": "e02fc6eff0f37c1611a35aa93ef9aaa3b55ab7371a5c96f4d2a5834106a13170",
+      "fhirVersions": [
+        "5.0.0"
+      ],
+      "dependencies": [
+        "hl7.fhir.r5.core#5.0.0"
+      ]
+    },
+    {
+      "name": "hl7.terminology.r5",
+      "version": "7.0.1",
+      "sha256": "f2de7264bd4a9c6771f211ee96b9952d32ab866e8b5d657884f8c375a34ffb87",
+      "fhirVersions": [
+        "5.0.0"
+      ],
+      "dependencies": [
+        "hl7.fhir.uv.extensions.r5#5.2.0"
+      ]
+    }
+  ],
+  "order": [
+    "hl7.fhir.r5.core#5.0.0",
+    "hl7.fhir.uv.extensions.r5#5.2.0",
+    "hl7.terminology.r5#7.0.1"
+  ]
+}

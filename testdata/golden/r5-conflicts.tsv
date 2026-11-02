@@ -1,0 +1,12 @@
+# canonical: publication-status=1 publisher=2 version-order=1
+# base-code: not-experimental=2 core-first=2 unresolved=1
+# kind	resourceType	key	decidedBy	winner	candidates (package version status [url])
+base-code		CodeSystem:effective	core-first	hl7.fhir.r5.core#5.0.0	hl7.fhir.r5.core#5.0.0 5.0.0 draft http://hl7.org/fhir/SearchParameter/MetadataResource-effective | hl7.fhir.uv.extensions.r5#5.2.0 5.2.0 active http://hl7.org/fhir/SearchParameter/codesystem-extensions-CodeSystem-effective
+base-code		Condition:subject	not-experimental	hl7.fhir.r5.core#5.0.0	hl7.fhir.r5.core#5.0.0 5.0.0 draft http://hl7.org/fhir/SearchParameter/Condition-subject | hl7.fhir.r5.core#5.0.0  draft http://hl7.org/fhir/SearchParameter/example-reference
+base-code		Resource:_filter	unresolved	-	hl7.fhir.r5.core#5.0.0 5.0.0 draft http://hl7.org/fhir/SearchParameter/Resource-filter | hl7.fhir.r5.core#5.0.0 1 draft http://hl7.org/fhir/SearchParameter/filter
+base-code		Resource:_id	not-experimental	hl7.fhir.r5.core#5.0.0	hl7.fhir.r5.core#5.0.0 5.0.0 active http://hl7.org/fhir/SearchParameter/Resource-id | hl7.fhir.r5.core#5.0.0 1 draft http://hl7.org/fhir/SearchParameter/example
+base-code		ValueSet:effective	core-first	hl7.fhir.r5.core#5.0.0	hl7.fhir.r5.core#5.0.0 5.0.0 draft http://hl7.org/fhir/SearchParameter/MetadataResource-effective | hl7.fhir.uv.extensions.r5#5.2.0 5.2.0 active http://hl7.org/fhir/SearchParameter/valueset-extensions-ValueSet-effective
+canonical	CodeSystem	http://terminology.hl7.org/CodeSystem/artifact-version-policy-codes	publisher	hl7.terminology.r5#7.0.1	hl7.fhir.uv.extensions.r5#5.2.0 5.2.0 active | hl7.terminology.r5#7.0.1 2.0.0 active
+canonical	NamingSystem	http://terminology.hl7.org/NamingSystem/hcpcs-Level-II	publication-status	hl7.terminology.r5#7.0.1	hl7.terminology.r5#7.0.1 1.0.0 retired | hl7.terminology.r5#7.0.1 1.0.2 active
+canonical	ValueSet	http://hl7.org/fhir/ValueSet/value-filter-comparator	version-order	hl7.fhir.uv.extensions.r5#5.2.0	hl7.fhir.r5.core#5.0.0 5.0.0 active | hl7.fhir.uv.extensions.r5#5.2.0 5.2.0 active
+canonical	ValueSet	http://terminology.hl7.org/ValueSet/artifact-version-policy	publisher	hl7.terminology.r5#7.0.1	hl7.fhir.uv.extensions.r5#5.2.0 5.2.0 active | hl7.terminology.r5#7.0.1 2.0.0 active

@@ -15,6 +15,9 @@ type Manifest struct {
 	// Type es el campo "type" tal como viene ("Core", "IG", y "fhir.core" en el
 	// núcleo R4).
 	Type string
+	// Canonical es el campo "canonical" del package.json: la URL base bajo la
+	// que el package publica sus recursos (packages.html). Puede estar vacío.
+	Canonical string
 	// FHIRVersions son las versiones FHIR declaradas: "fhirVersions" o, si no
 	// está, el campo legado "fhir-version-list" (los núcleos R4 solo traen ese).
 	FHIRVersions []string
@@ -29,6 +32,7 @@ type rawManifest struct {
 	Name            string            `json:"name"`
 	Version         string            `json:"version"`
 	Type            string            `json:"type"`
+	Canonical       string            `json:"canonical"`
 	FHIRVersions    []string          `json:"fhirVersions"`
 	FHIRVersionList []string          `json:"fhir-version-list"`
 	Dependencies    map[string]string `json:"dependencies"`
@@ -48,7 +52,7 @@ func ReadManifest(data []byte) (Manifest, error) {
 	if err := validVersion(raw.Version); err != nil {
 		return Manifest{}, fmt.Errorf("invalid package.json: version: %w", err)
 	}
-	m := Manifest{Name: raw.Name, Version: raw.Version, Type: raw.Type, Dependencies: raw.Dependencies}
+	m := Manifest{Name: raw.Name, Version: raw.Version, Type: raw.Type, Canonical: raw.Canonical, Dependencies: raw.Dependencies}
 	switch {
 	case len(raw.FHIRVersions) > 0:
 		m.FHIRVersions = raw.FHIRVersions

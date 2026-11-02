@@ -40,7 +40,7 @@ run() {
     echo "Command: \`$cmd\` · exit status: $status · ${secs} s · max RSS $((${rss:-0} / rss_div)) MB"
     echo
     echo '```text'
-    grep -E -e '^(--- |ok |FAIL|PASS|panic)' -e '_test\.go:[0-9]+: ' -e '\.lock: FHIR' "$log" | sed -E 's/^ +//' || true
+    grep -E -e '^(--- |ok |FAIL|PASS|panic)' -e '_test\.go:[0-9]+: ' -e '\.lock: FHIR' -e 'conflicts: ' "$log" | sed -E 's/^ +//' || true
     echo '```'
     echo
   } >>"$out"
@@ -68,6 +68,10 @@ run "make check" "make check"
 run "official packages (make check-packages)" "FHIRPKG_PACKAGES=$pk go test -count=1 -v -run TestReal ."
 for lock in testdata/*.lock; do
   run "Open without network: $lock" "$bin verify -lock $lock -dir $pk"
+done
+# NewContext (plan 002): tiempo, heap y RSS máximo de Open + NewContext por versión.
+for lock in testdata/r4.lock testdata/r4b.lock testdata/r5.lock; do
+  run "Open and NewContext: $lock" "$bin context -lock $lock -dir $pk"
 done
 if [[ $failed -ne 0 ]]; then
   echo "**At least one command failed.**" >>"$out"

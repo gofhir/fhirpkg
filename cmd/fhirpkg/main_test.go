@@ -129,3 +129,17 @@ func TestReadCandidatesRejectsBadLines(t *testing.T) {
 		}
 	}
 }
+
+func TestContextCommand(t *testing.T) {
+	dir := fixture(t)
+	lockFile := filepath.Join(t.TempDir(), "c.lock")
+	if err := runLock([]string{"-registry", dir, "-o", lockFile, "core.b#4.3.0"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := runContext([]string{"-lock", lockFile, "-dir", dir}); err != nil {
+		t.Fatal(err)
+	}
+	if err := runContext([]string{"-lock", filepath.Join(t.TempDir(), "missing.lock"), "-dir", dir}); err == nil {
+		t.Fatal("a missing lock was accepted")
+	}
+}

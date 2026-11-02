@@ -12,26 +12,42 @@ vet:
 	go vet ./...
 
 # Sin red ni packages: los tests con los packages oficiales se omiten (ver
-# check-packages). Los semillas de FuzzReadManifest y FuzzReadTgz corren aquí.
+# check-packages). Los semillas de los Fuzz* corren aquí, y el Context se prueba
+# con -race (es inmutable y se usa desde varias goroutines).
 test:
 	go test ./...
+	go test -race -count=1 -run 'TestContextIsConcurrent' .
 
 # Descarga los packages oficiales (SHA-256 fijado en scripts/packages.sha256) a
 # .cache/packages y corre los tests que los usan: los locks de testdata, el
-# grafo real de R4B, el núcleo R4 con fhir-version-list.
+# grafo real de R4B, el núcleo R4 con fhir-version-list, y (plan 002) la cascada
+# de canónicos con su dorado y la herencia de SearchParameter contra searchindex.
 .PHONY: fetch check-packages
 fetch:
 	scripts/fetch-packages.sh
 
+# TestRealInheritanceMatchesSearchIndex compara con ../go-searchindex y se omite si
+# falta; check-packages falla en ese caso (ALLOW_NO_SEARCHINDEX=1 lo permite, p. ej.
+# en un CI sin el repo hermano).
 check-packages: fetch
+	@if [ ! -d ../go-searchindex/definitions/data ] && [ -z "$(ALLOW_NO_SEARCHINDEX)" ]; then \
+		echo "check-packages: ../go-searchindex/definitions/data is missing, so the searchindex comparison would be skipped (ALLOW_NO_SEARCHINDEX=1 to allow)"; exit 1; fi
 	FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages go test -count=1 -v -run 'TestReal' .
 
-# Fuzzing corto de los dos lectores (FUZZTIME por objetivo).
+# Dorado de Conflicts() por versión (testdata/golden, plan 002): lo reescribe con
+# los packages oficiales. Revisar siempre el diff.
+.PHONY: golden
+golden: fetch
+	FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages go test -count=1 -run '^(TestRealConflictsGolden|TestRealResourceTypesFile)$$' . -update
+
+# Fuzzing corto de los lectores y del canónico y las versiones (FUZZTIME por objetivo).
 FUZZTIME ?= 30s
 .PHONY: fuzz
 fuzz:
 	go test -run '^$$' -fuzz '^FuzzReadManifest$$' -fuzztime $(FUZZTIME) .
 	go test -run '^$$' -fuzz '^FuzzReadTgz$$' -fuzztime $(FUZZTIME) .
+	go test -run '^$$' -fuzz '^FuzzParseCanonical$$' -fuzztime $(FUZZTIME) .
+	go test -run '^$$' -fuzz '^FuzzCompareVersions$$' -fuzztime $(FUZZTIME) .
 
 # Reporte del grafo (plan 001, pieza F): para cada raíz candidata de
 # scripts/graph-candidates.txt, el grafo, los núcleos ajenos, las versiones

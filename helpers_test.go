@@ -61,6 +61,7 @@ func buildTgz(t testing.TB, entries []entry) []byte {
 // pkg describe un package sintético.
 type pkg struct {
 	name, version, typ string
+	canonical          string // package.json canonical
 	fhirVersions       []string
 	legacyList         []string
 	deps               map[string]string
@@ -73,6 +74,9 @@ func (p pkg) manifestJSON() string {
 	m := map[string]any{"name": p.name, "version": p.version}
 	if p.typ != "" {
 		m["type"] = p.typ
+	}
+	if p.canonical != "" {
+		m["canonical"] = p.canonical
 	}
 	if p.fhirVersions != nil {
 		m["fhirVersions"] = p.fhirVersions

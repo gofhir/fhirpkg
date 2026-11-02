@@ -3,6 +3,7 @@
 //	fhirpkg lock   -o fhirpkg.lock [-registry URL|DIR] [-except name#version=motivo] raíz...
 //	fhirpkg verify -lock fhirpkg.lock -dir DIR
 //	fhirpkg graph  -candidates FILE [-registry URL|DIR] [-o reporte.md]
+//	fhirpkg context -lock fhirpkg.lock -dir DIR
 //
 // Solo lock y graph (con un registro remoto) usan la red.
 package main
@@ -31,6 +32,8 @@ func main() {
 		err = runVerify(os.Args[2:])
 	case "graph":
 		err = runGraph(os.Args[2:])
+	case "context":
+		err = runContext(os.Args[2:])
 	default:
 		usage()
 	}
@@ -41,7 +44,7 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintln(os.Stderr, "usage: fhirpkg lock|verify|graph [flags] (see the package comment)")
+	fmt.Fprintln(os.Stderr, "usage: fhirpkg lock|verify|graph|context [flags] (see the package comment)")
 	os.Exit(2)
 }
 
@@ -124,5 +127,52 @@ func runVerify(args []string) error {
 	}
 	fmt.Printf("%s: FHIR %s, %d packages, %d resources, open %s, retained heap %d MB\n",
 		*lockFile, set.FHIRVersion(), len(set.Packages()), total, elapsed.Round(time.Millisecond), ms.HeapAlloc>>20)
+	return nil
+}
+
+// runContext abre el lock y construye el Context (plan 002): imprime el tiempo,
+// el heap retenido y las cuentas de la cascada por paso.
+func runContext(args []string) error {
+	fs := flag.NewFlagSet("context", flag.ExitOnError)
+	lockFile := fs.String("lock", "fhirpkg.lock", "lock file")
+	dir := fs.String("dir", ".cache/packages", "directory with the name-version.tgz files")
+	_ = fs.Parse(args)
+	lock, err := fhirpkg.ReadLockFile(*lockFile)
+	if err != nil {
+		return err
+	}
+	set, err := fhirpkg.Open(lock, *dir)
+	if err != nil {
+		return err
+	}
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	start := time.Now()
+	c, err := fhirpkg.NewContext(set)
+	if err != nil {
+		return err
+	}
+	elapsed := time.Since(start)
+	runtime.GC()
+	runtime.ReadMemStats(&after)
+	byStep := map[fhirpkg.Kind]map[fhirpkg.Step]int{}
+	for _, cf := range c.Conflicts() {
+		if byStep[cf.Kind] == nil {
+			byStep[cf.Kind] = map[fhirpkg.Step]int{}
+		}
+		byStep[cf.Kind][cf.DecidedBy]++
+	}
+	for _, kind := range []fhirpkg.Kind{fhirpkg.KindCanonical, fhirpkg.KindSearchParameter} {
+		var parts []string
+		for _, st := range []fhirpkg.Step{fhirpkg.StepSeries, fhirpkg.StepStatus, fhirpkg.StepPublisher, fhirpkg.StepVersion, fhirpkg.StepLastUpdated, fhirpkg.StepNotExperimental, fhirpkg.StepCore, fhirpkg.StepUnresolved} {
+			if n := byStep[kind][st]; n > 0 {
+				parts = append(parts, fmt.Sprintf("%s %d", st, n))
+			}
+		}
+		fmt.Printf("%s conflicts: %s\n", kind, strings.Join(parts, ", "))
+	}
+	fmt.Printf("%s: FHIR %s, %d resource types, NewContext %s, heap retained by the Context %d MB\n",
+		*lockFile, set.FHIRVersion(), len(c.ResourceTypes()), elapsed.Round(time.Millisecond), (int64(after.HeapAlloc)-int64(before.HeapAlloc))>>20)
 	return nil
 }

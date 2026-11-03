@@ -52,7 +52,7 @@ check-packages: fetch
 parity: fetch
 	scripts/fetch-packages.sh $(CURDIR)/scripts/examples.sha256 >/dev/null
 	scripts/fetch-synthea.sh >/dev/null
-	cd ../go-searchindex && scripts/fetch-packages.sh >/dev/null && GEN_CORPUS_OUT=$(CURDIR)/.cache/generated \
+	cd ../go-searchindex && scripts/fetch-packages.sh >/dev/null && scripts/fetch-packages.sh $$PWD/scripts/hl7-packages.sha256 >/dev/null && GEN_CORPUS_OUT=$(CURDIR)/.cache/generated \
 		SEARCHINDEX_PACKAGES=$$PWD/.cache/packages go test -count=1 -run '^TestWriteGeneratedCorpus$$' .
 	cd parity && FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages EXAMPLES_PACKAGES=$(CURDIR)/.cache/packages \
 		SYNTHEA_ZIP=$(CURDIR)/.cache/synthea/synthea_sample_data_fhir_r4_nov2021.zip GEN_CORPUS=$(CURDIR)/.cache/generated \

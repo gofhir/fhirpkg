@@ -1,0 +1,40 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+# check-packages compara con gofhir/searchindex y la paridad usa sus recursos
+# generados (plan 004 D3): se clona al lado, como en el árbol local
+# (../go-searchindex). El repo es privado, así que necesita el secreto
+# SEARCHINDEX_TOKEN (token de solo lectura del contenido de gofhir/searchindex).
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: go-fhirpkg
+      - uses: actions/checkout@v4
+        with:
+          repository: gofhir/searchindex
+          token: ${{ secrets.SEARCHINDEX_TOKEN }}
+          path: go-searchindex
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go-fhirpkg/go.mod
+          cache-dependency-path: |
+            go-fhirpkg/go.sum
+            go-fhirpkg/parity/go.sum
+            go-searchindex/go.sum
+      - name: Caché de packages FHIR y de Synthea (SHA-256 verificado por los scripts de descarga)
+        uses: actions/cache@v4
+        with:
+          path: |
+            go-fhirpkg/.cache/packages
+            go-fhirpkg/.cache/synthea
+            go-searchindex/.cache/packages
+          key: fhir-data-${{ hashFiles('go-fhirpkg/scripts/*.sha256', 'go-searchindex/scripts/packages.sha256', 'go-searchindex/scripts/hl7-packages.sha256') }}
+      - name: make ci
+        working-directory: go-fhirpkg
+        run: make ci

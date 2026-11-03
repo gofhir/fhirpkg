@@ -1,5 +1,7 @@
 # fhirpath: `Analyze` rechaza navegaciones válidas sobre un tipo abstracto
 
+**Publicado:** [gofhir/fhirpath#257](https://github.com/gofhir/fhirpath/issues/257) (03-11-2026), reproducido también en `main` 62dfbe6.
+
 **Librería:** `gofhir/fhirpath` v1.16.6 y `main` (84be8dc), `analyze.go:345-356` (`modelDescribes`).
 
 **Reproducción** (`/Volumes/dev/tmp/h1probe/main.go`): un `Model` que, además de lo que da `models/r4` v2.10.0, describe `Resource.id`, `DomainResource.id`, `DomainResource.contained` y `Resource.meta`, como hace un modelo construido desde los snapshot de los StructureDefinition:

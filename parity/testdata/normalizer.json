@@ -1,0 +1,387 @@
+[
+ {
+  "source": "generated",
+  "version": "R4B",
+  "class": "unchanged",
+  "rule": "-",
+  "count": 1594
+ },
+ {
+  "source": "generated",
+  "version": "R4",
+  "class": "unchanged",
+  "rule": "-",
+  "count": 1575
+ },
+ {
+  "source": "generated",
+  "version": "R5",
+  "class": "unchanged",
+  "rule": "-",
+  "count": 2167
+ },
+ {
+  "source": "official",
+  "version": "R4B",
+  "class": "unchanged",
+  "rule": "-",
+  "count": 2840
+ },
+ {
+  "source": "official",
+  "version": "R4",
+  "class": "unchanged",
+  "rule": "-",
+  "count": 5309
+ },
+ {
+  "source": "official",
+  "version": "R5",
+  "class": "unchanged",
+  "rule": "-",
+  "count": 2822
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "deletes",
+  "rule": "empty (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "deletes",
+  "rule": "not-primitive (rule 4)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "deletes",
+  "rule": "null (rule 6)",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "deletes",
+  "rule": "unknown-property (rule 6)",
+  "count": 12
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "keeps-invalid",
+  "rule": "duplicate-property (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "keeps-invalid",
+  "rule": "empty (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "keeps-invalid",
+  "rule": "empty-string (rule D5)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "keeps-invalid",
+  "rule": "length-mismatch (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "keeps-invalid",
+  "rule": "multiple-choice (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "keeps-invalid",
+  "rule": "unknown-property (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "models-fails",
+  "rule": "normalize accepts",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "models-fails",
+  "rule": "normalize rejects: wrong-shape (rule 6)",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "repairs-text",
+  "rule": "syntax (rule 1)",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "transforms",
+  "rule": "a string is written as a number (5)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "unchanged",
+  "rule": "-",
+  "count": 6
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "unknown-resource",
+  "rule": "unknown-resource-type (rule D4)",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "deletes",
+  "rule": "empty (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "deletes",
+  "rule": "not-primitive (rule 4)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "deletes",
+  "rule": "null (rule 6)",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "deletes",
+  "rule": "unknown-property (rule 6)",
+  "count": 12
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "keeps-invalid",
+  "rule": "duplicate-property (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "keeps-invalid",
+  "rule": "empty (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "keeps-invalid",
+  "rule": "empty-string (rule D5)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "keeps-invalid",
+  "rule": "length-mismatch (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "keeps-invalid",
+  "rule": "multiple-choice (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "keeps-invalid",
+  "rule": "unknown-property (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "models-fails",
+  "rule": "normalize accepts",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "models-fails",
+  "rule": "normalize rejects: wrong-shape (rule 6)",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "repairs-text",
+  "rule": "syntax (rule 1)",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "transforms",
+  "rule": "a string is written as a number (5)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "unchanged",
+  "rule": "-",
+  "count": 6
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "unknown-resource",
+  "rule": "unknown-resource-type (rule D4)",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "deletes",
+  "rule": "empty (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "deletes",
+  "rule": "not-primitive (rule 4)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "deletes",
+  "rule": "null (rule 6)",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "deletes",
+  "rule": "unknown-property (rule 6)",
+  "count": 11
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "keeps-invalid",
+  "rule": "duplicate-property (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "keeps-invalid",
+  "rule": "empty (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "keeps-invalid",
+  "rule": "empty-string (rule D5)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "keeps-invalid",
+  "rule": "length-mismatch (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "keeps-invalid",
+  "rule": "multiple-choice (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "keeps-invalid",
+  "rule": "unknown-property (rule 6)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "models-fails",
+  "rule": "normalize accepts",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "models-fails",
+  "rule": "normalize rejects: wrong-shape (rule 6)",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "repairs-text",
+  "rule": "syntax (rule 1)",
+  "count": 2
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "transforms",
+  "rule": "a string is written as a number (5)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "unchanged",
+  "rule": "-",
+  "count": 7
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "unknown-resource",
+  "rule": "unknown-resource-type (rule D4)",
+  "count": 2
+ },
+ {
+  "source": "synthea",
+  "version": "R4",
+  "class": "unchanged",
+  "rule": "-",
+  "count": 557
+ }
+]

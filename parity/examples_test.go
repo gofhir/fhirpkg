@@ -82,3 +82,45 @@ func examplesOf(t testing.TB, ver string) []example {
 	exCache[ver] = out
 	return out
 }
+
+// walkAll recorre los ejemplos de la versión sin retenerlos: cada cuerpo se
+// suelta apenas la función vuelve (hay Bundle-resources de 40 MB).
+func walkAll(t testing.TB, ver string, f func(name string, raw []byte)) {
+	t.Helper()
+	dir := os.Getenv("EXAMPLES_PACKAGES")
+	if dir == "" {
+		t.Skip("EXAMPLES_PACKAGES is not set (make parity)")
+	}
+	fh, err := os.Open(filepath.Join(dir, examplePackages[ver]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer fh.Close()
+	gz, err := gzip.NewReader(fh)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tr := tar.NewReader(gz)
+	for {
+		h, err := tr.Next()
+		if errors.Is(err, io.EOF) {
+			return
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		base := path.Base(h.Name)
+		if path.Dir(h.Name) != "package" || !strings.HasSuffix(base, ".json") || base == "package.json" || strings.HasPrefix(base, ".") {
+			continue
+		}
+		raw, err := io.ReadAll(tr)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var head struct{ ResourceType string }
+		if json.Unmarshal(raw, &head) != nil || head.ResourceType == "" {
+			continue
+		}
+		f(base, raw)
+	}
+}

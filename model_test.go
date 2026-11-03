@@ -844,3 +844,18 @@ func checkModelInvariants(t testing.TB, c *Context) {
 		}
 	}
 }
+
+// Plan 004, D6: IsPrimitive sale de kind primitive-type del StructureDefinition.
+func TestModelIsPrimitive(t *testing.T) {
+	forVersions(t, func(t *testing.T, v modelVersion, m *Model) {
+		for name, want := range map[string]bool{
+			"string": true, "decimal": true, "date": true, "boolean": true, "code": true,
+			"Quantity": false, "Age": false, "Patient": false, "Resource": false, "Element": false,
+			"Foo": false, "Nope": false, "": false, "http://hl7.org/fhirpath/System.String": false,
+		} {
+			if got := m.IsPrimitive(name); got != want {
+				t.Errorf("IsPrimitive(%q) = %v, want %v", name, got, want)
+			}
+		}
+	})
+}

@@ -114,3 +114,16 @@ var jsonFieldSources = map[string]string{
 	"fhirVersions":           "packages.html: package.json fhirVersions",
 	"fhir-version-list":      "packages.html: package.json fhir-version-list (campo legado del núcleo R4)",
 }
+
+// Vocabulario del formato JSON de FHIR (plan 004 §7).
+const (
+	// propResourceType: json.html §2.6.2: la propiedad que dice de qué tipo es
+	// un recurso («resourceType»).
+	propResourceType = "resourceType"
+	// primitiveExtPrefix: json.html §2.6.2.3: la propiedad `_x` lleva el id y
+	// las extensiones del primitivo `x`.
+	primitiveExtPrefix = "_"
+	// rootFallback: resource.html: todo recurso es un Resource. Nombra la raíz de
+	// la ruta de un error de sintaxis cuando el resourceType no se alcanzó a leer.
+	rootFallback = "Resource"
+)

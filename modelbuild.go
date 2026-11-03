@@ -137,7 +137,7 @@ func (c *Context) buildModel(keys []key, docs map[*cand]parsed) (*Model, error) 
 				return nil, fmt.Errorf("%s: type %s: base definition %s is %q, which is not a type", d.cand.pkgID, name, d.doc.BaseDefinition, d.parent)
 			}
 		}
-		m.types[name] = typeInfo{parent: d.parent, resource: d.doc.Kind == kindResource && !d.doc.Abstract}
+		m.types[name] = typeInfo{parent: d.parent, resource: d.doc.Kind == kindResource && !d.doc.Abstract, primitive: d.doc.Kind == kindPrimitive}
 	}
 	for _, name := range m.names {
 		chain := []string{name}

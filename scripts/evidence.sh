@@ -65,7 +65,7 @@ run() {
 bin=$(mktemp -d)/fhirpkg
 go build -o "$bin" ./cmd/fhirpkg
 run "make check" "make check"
-run "official packages (make check-packages)" "FHIRPKG_PACKAGES=$pk go test -count=1 -v -run TestReal ."
+run "official packages (make check-packages)" "FHIRPKG_PACKAGES=$pk go test -count=1 -v -run 'TestReal|TestNormalize' ."
 for lock in testdata/*.lock; do
   run "Open without network: $lock" "$bin verify -lock $lock -dir $pk"
 done

@@ -20,11 +20,13 @@ type Model struct {
 	children  map[string][]string
 	fhirType  map[string]string
 	card      map[string]cardinality
+	norm      normState // plan 004: la caché del normalizador
 }
 
 type typeInfo struct {
-	parent   string
-	resource bool
+	parent    string
+	resource  bool
+	primitive bool
 }
 
 type cardinality struct{ min, max int32 }
@@ -45,6 +47,12 @@ func (m *Model) HasType(typeName string) bool {
 
 // IsResource informa si el tipo es de kind resource y no es abstracto.
 func (m *Model) IsResource(typeName string) bool { return m.types[typeName].resource }
+
+// IsPrimitive informa si el tipo es un tipo primitivo de FHIR: el
+// StructureDefinition es de kind primitive-type (plan 004, D6). Los tipos del
+// sistema de FHIRPath (System.String...) no son tipos del modelo y dan false,
+// igual que un nombre desconocido.
+func (m *Model) IsPrimitive(typeName string) bool { return m.types[typeName].primitive }
 
 // ParentType es el tipo del StructureDefinition de baseDefinition, o "" si el
 // tipo no existe o no tiene base.

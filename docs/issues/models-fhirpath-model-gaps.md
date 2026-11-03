@@ -1,8 +1,10 @@
 # models: diferencias de `FHIRPathModel` con los StructureDefinition
 
+**Publicado:** el punto 1 ya estaba en [gofhir/models#87](https://github.com/gofhir/models/issues/87); los puntos 2 y 3, en [gofhir/models#88](https://github.com/gofhir/models/issues/88) (03-11-2026).
+
 **Librería:** `gofhir/models` v2.10.0 (`r4`, `r4b`, `r5`), `internal/codegen`.
 
-Medido por la paridad del plan 003 de `fhirpkg` (`make parity`, módulo `parity/`), que compara las nueve tablas de `FHIRPathModelData` con un modelo construido desde los snapshot de los núcleos oficiales. El reporte (`docs/evidence/<fecha>-parity.md`) trae todas las diferencias y su clasificación; las cifras de abajo las escribe la paridad, no se editan a mano. Se publica solo si el usuario lo pide.
+Medido por la paridad del plan 003 de `fhirpkg` (`make parity`, módulo `parity/`), que compara las nueve tablas de `FHIRPathModelData` con un modelo construido desde los snapshot de los núcleos oficiales. El reporte (`docs/evidence/<fecha>-parity.md`) trae todas las diferencias y su clasificación; las cifras de abajo las escribe la paridad, no se editan a mano.
 
 1. **`nested-backbone-type`: elementos anidados de tipos de datos tipados como `BackboneElement`.** El snapshot les da `Element` (p. ej. `Timing.repeat`, `Dosage.doseAndRate`, `ElementDefinition.*`; `analyzer.go:474`). Efecto: `timing.repeat.is(BackboneElement)` es verdadero y `descendants().type().name` da `BackboneElement` donde el validador de HL7 da `Element`.
 2. **`no-targets-on-choice-variants` y `repeated-target`: `ReferenceTargets` incompleto.** Sin destinos en las variantes de un elemento con varios tipos (`productReference`, `subjectCanonical`…), aunque cada variante conserva el `targetProfile` de su tipo. Además, `Media.device` repite `Device` en R4 y R4B (`[Device, DeviceMetric, Device]`): el snapshot lista `Device` en dos `targetProfile`.

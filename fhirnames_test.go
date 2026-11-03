@@ -34,6 +34,26 @@ var formatLiterals = map[string]bool{
 	`"01"`:                 true, // fhirDateKey: mes y día por defecto
 	`"0000"`:               true, // fhirDateKey: el año 0000 no es una fecha FHIR (datatypes.html)
 	`")"`:                  true, // separador en un mensaje
+	// Incremento 004 (normalizador): los nombres de ErrorKind, los literales del
+	// formato JSON (RFC 8259) y la tabla de dígitos; ninguno es un nombre de FHIR.
+	`"syntax"`:                true, // ErrorKind
+	`"too-large"`:             true, // ErrorKind
+	`"too-deep"`:              true, // ErrorKind
+	`"missing-resource-type"`: true, // ErrorKind
+	`"unknown-resource-type"`: true, // ErrorKind
+	`"unknown-property"`:      true, // ErrorKind
+	`"duplicate-property"`:    true, // ErrorKind
+	`"not-primitive"`:         true, // ErrorKind
+	`"multiple-choice"`:       true, // ErrorKind
+	`"length-mismatch"`:       true, // ErrorKind
+	`"wrong-shape"`:           true, // ErrorKind
+	`"empty-string"`:          true, // ErrorKind
+	`"null"`:                  true, // ErrorKind y el literal JSON
+	`"true"`:                  true, // literal JSON
+	`"false"`:                 true, // literal JSON
+	`"ErrorKind(%d)"`:         true, // ErrorKind.String de un valor fuera de rango
+	`"%s: %s (offset %d)"`:    true, // Error.Error
+	`"0123456789abcdef"`:      true, // dígitos hex de un escape \u
 	// Incremento 001 y CLI: vocabulario de la especificación de packages
 	// (packages.html), del formato del lock y de la línea de comandos; ninguno
 	// es un nombre de recurso o elemento de FHIR.

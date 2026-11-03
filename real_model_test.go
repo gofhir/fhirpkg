@@ -5,6 +5,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"testing"
@@ -227,5 +229,28 @@ func TestRealModelOracle(t *testing.T) {
 			}
 			t.Logf("%s oracle: %d reference, %d cardinality and %d fhir-type paths, python took %s", rc.name, len(refs), len(cards), len(ftypes), took.Round(10*time.Millisecond))
 		})
+	}
+}
+
+// Plan 004, D6: los tipos primitivos de cada versión (datatypes.html, «Primitive
+// Types»): 20 en R4 y R4B, y R5 agrega integer64.
+func TestRealModelIsPrimitive(t *testing.T) {
+	r4 := []string{"base64Binary", "boolean", "canonical", "code", "date", "dateTime", "decimal", "id", "instant", "integer",
+		"markdown", "oid", "positiveInt", "string", "time", "unsignedInt", "uri", "url", "uuid", "xhtml"}
+	want := map[string][]string{"R4": r4, "R4B": r4, "R5": append(append([]string{}, r4...), "integer64")}
+	for _, rc := range realModelCases {
+		c, _ := realContext(t, rc.lock)
+		m := c.Model()
+		var got []string
+		for _, ty := range m.Types() {
+			if m.IsPrimitive(ty) {
+				got = append(got, ty)
+			}
+		}
+		w := append([]string(nil), want[rc.name]...)
+		sort.Strings(w)
+		if !slices.Equal(got, w) {
+			t.Errorf("%s: primitives = %v, want %v", rc.name, got, w)
+		}
 	}
 }

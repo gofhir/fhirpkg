@@ -277,7 +277,7 @@ Revisor: Opus. **Convergió:** sin hallazgos de severidad media o mayor. Cuatro 
 - **eld-17:** `targetProfile` solo con `Reference`, `canonical` o `CodeableReference` no se comprueba (exigiría nombres de tipo en el código y una ADR); un `targetProfile` en otro tipo se resuelve y se guarda.
 - **Límite del oráculo:** `scripts/model_oracle.py` es independiente en la implementación, pero comparte la lectura de las reglas; lo sostienen los casos a mano de `TestRealModelSpecCases`. No cubre IG con tipos propios.
 
-**Issues redactados, sin publicar** (solo si el usuario lo pide): [`docs/issues/fhirpath-analyze-abstract-types.md`](../issues/fhirpath-analyze-abstract-types.md) y [`docs/issues/models-fhirpath-model-gaps.md`](../issues/models-fhirpath-model-gaps.md).
+**Issues redactados, sin publicar** (solo si el usuario lo pide): [`docs/issues/fhirpath-analyze-abstract-types.md`](../issues/fhirpath-analyze-abstract-types.md) y [`docs/issues/models-fhirpath-model-gaps.md`](../issues/models-fhirpath-model-gaps.md). Publicados el 03-11-2026 a pedido del usuario: [gofhir/fhirpath#257](https://github.com/gofhir/fhirpath/issues/257) y [gofhir/models#88](https://github.com/gofhir/models/issues/88) (el punto 1 ya era [gofhir/models#87](https://github.com/gofhir/models/issues/87)).
 
 **Estado de la ADR-004:** sigue **Propuesta**; pasa a Aceptada cuando CI corra en verde (no ha corrido: no hay commit).
 

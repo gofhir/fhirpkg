@@ -7,6 +7,7 @@ package parity
 
 import (
 	"fmt"
+	"github.com/gofhir/fhirpkg"
 	"os"
 	"sort"
 	"strings"
@@ -105,6 +106,7 @@ func renderReport() string {
 		}
 	}
 	b.WriteString("\nThe Analyze differences are the known loss of H1 ([fhirpath-analyze-abstract-types](../issues/fhirpath-analyze-abstract-types.md)); the model is not changed to avoid it.\n")
+	b.WriteString(renderNormalizer())
 	if len(benchRows) > 0 {
 		sort.Slice(benchRows, func(i, j int) bool { return benchRows[i].Name < benchRows[j].Name })
 		b.WriteString("\n## Benchmark with both models already built\n\nInformative, no thresholds. `Extract` is one pass over a sample of two examples per resource type; `Lookups` is the model queries of one evaluation.\n\n| Benchmark | ns/op | allocs/op | B/op |\n| --- | --- | --- | --- |\n")
@@ -151,4 +153,73 @@ func updateIssue(path string) error {
 	}
 	b.WriteString("\n" + end)
 	return os.WriteFile(path, []byte(s[:i]+b.String()+s[j+len(end):]), 0o644)
+}
+
+// renderNormalizer es la sección del normalizador (plan 004): la paridad por
+// fuente y clase, el anidamiento medido y el benchmark contra models.
+func renderNormalizer() string {
+	npMu.Lock()
+	stats, rows := append([]normStat(nil), npStats...), append([]parityCount(nil), npRows...)
+	npMu.Unlock()
+	nbMu.Lock()
+	bench := append([]benchRowN(nil), nbRows...)
+	nbMu.Unlock()
+	if len(stats) == 0 && len(bench) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n## Normalizer (`Context.Normalize`) against gofhir/models\n\n")
+	if len(stats) > 0 {
+		b.WriteString("Every resource goes through `Normalize` and through `UnmarshalResource` + `Marshal` of models; the class of each one is in `parity/testdata/normalizer.json` (counts fixed; the test fails on an unclassified resource or a count that changes). `probes` are the hand-written inputs for the classes that no corpus exercises. Reordered: the output differs from the input and still equals what models writes.\n\n")
+		b.WriteString("| Source | FHIR | Resources | MB | Unchanged and reordered | Max nesting (objects and arrays, root = 1) |\n| --- | --- | --- | --- | --- | --- |\n")
+		sort.Slice(stats, func(i, j int) bool {
+			return stats[i].Source+stats[i].Version < stats[j].Source+stats[j].Version
+		})
+		for _, s := range stats {
+			nest := fmt.Sprint(s.MaxDepth)
+			if s.Source == "probes" {
+				nest = "-"
+			}
+			fmt.Fprintf(&b, "| %s | %s | %d | %d | %d | %s |\n", s.Source, s.Version, s.Resources, s.Bytes>>20, s.Reordered, nest)
+		}
+		fmt.Fprintf(&b, "\nDefault depth limit of `Normalize`: %d (`fhirpkg.DefaultMaxDepth`); the test requires at least twice the measured maximum.\n\n", fhirpkg.DefaultMaxDepth)
+		type k struct{ src, class, rule string }
+		agg := map[k]map[string]int{}
+		var order []k
+		for _, r := range rows {
+			key := k{r.Source, r.Class, r.Rule}
+			if agg[key] == nil {
+				agg[key] = map[string]int{}
+				order = append(order, key)
+			}
+			agg[key][r.Version] = r.Count
+		}
+		sort.Slice(order, func(i, j int) bool { return fmt.Sprint(order[i]) < fmt.Sprint(order[j]) })
+		b.WriteString("| Source | Class | Rule | Count (R4 / R4B / R5) |\n| --- | --- | --- | --- |\n")
+		for _, key := range order {
+			fmt.Fprintf(&b, "| %s | `%s` | %s | %s |\n", key.src, key.class, key.rule, counts(agg[key]))
+		}
+	}
+	if len(bench) > 0 {
+		b.WriteString("\n### Benchmark: Normalize against models UnmarshalResource + Marshal\n\nInformative, no thresholds. Time and allocations from `testing.Benchmark` (one process, warm); RSS is the maximum of a child process per measurement minus its base (the example in memory, and the Context for fhirpkg), in MB, with a noise of a few MB.\n\n| FHIR | Example | Bytes | Implementation | ms/op | allocs/op | B/op | RSS MB |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n")
+		sort.Slice(bench, func(i, j int) bool {
+			a, c := bench[i], bench[j]
+			if a.Version != c.Version {
+				return a.Version < c.Version
+			}
+			if a.Size != c.Size {
+				return a.Size < c.Size
+			}
+			return a.Impl < c.Impl
+		})
+		for _, r := range bench {
+			if r.Err != "" {
+				fmt.Fprintf(&b, "| %s | %s | %d | %s | fails: %s | | | |\n", r.Version, r.Example, r.Size, r.Impl, r.Err)
+				continue
+			}
+			fmt.Fprintf(&b, "| %s | %s | %d | %s | %.2f | %d | %d | %d |\n", r.Version, r.Example, r.Size, r.Impl, float64(r.NsPerOp)/1e6, r.AllocsPerOp, r.BytesPerOp, r.RSSMB)
+		}
+	}
+	b.WriteString(renderRetention())
+	return b.String()
 }

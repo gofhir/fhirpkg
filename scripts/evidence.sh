@@ -73,6 +73,10 @@ done
 for lock in testdata/r4.lock testdata/r4b.lock testdata/r5.lock; do
   run "Open and NewContext: $lock" "$bin context -lock $lock -dir $pk"
 done
+# Paridad del modelo de tipos (plan 003): las nueve tablas contra models, el
+# diferencial de searchindex y de fhirpath, y el benchmark con los dos modelos.
+# Su reporte es docs/evidence/<fecha>-parity.md.
+run "type model parity (make parity)" "make parity"
 if [[ $failed -ne 0 ]]; then
   echo "**At least one command failed.**" >>"$out"
   echo "$out: at least one command failed" >&2

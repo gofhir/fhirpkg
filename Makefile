@@ -1,4 +1,4 @@
-.PHONY: check fmt vet test ci
+.PHONY: check fmt vet test ci parity
 
 check: fmt vet test
 
@@ -16,7 +16,7 @@ vet:
 # con -race (es inmutable y se usa desde varias goroutines).
 test:
 	go test ./...
-	go test -race -count=1 -run 'TestContextIsConcurrent' .
+	go test -race -count=1 -run 'TestContextIsConcurrent|TestModelIsConcurrent' .
 
 # Descarga los packages oficiales (SHA-256 fijado en scripts/packages.sha256) a
 # .cache/packages y corre los tests que los usan: los locks de testdata, el
@@ -33,12 +33,27 @@ check-packages: fetch
 	@if [ ! -d ../go-searchindex/definitions/data ] && [ -z "$(ALLOW_NO_SEARCHINDEX)" ]; then \
 		echo "check-packages: ../go-searchindex/definitions/data is missing, so the searchindex comparison would be skipped (ALLOW_NO_SEARCHINDEX=1 to allow)"; exit 1; fi
 	FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages go test -count=1 -v -run 'TestReal' .
+	$(MAKE) parity
+
+# Paridad del modelo de tipos (plan 003), en el módulo parity/ (su propio go.mod:
+# gofhir/models, gofhir/fhirpath y ../go-searchindex por replace). Compara las nueve
+# tablas de models con las de Context.Model(), el diferencial de searchindex.Extract
+# sobre los ejemplos oficiales, el de fhirpath (is, as, type(), children(),
+# Analyze) y el benchmark con los dos modelos. Falla ante una diferencia sin
+# clasificar en parity/testdata/differences.json. Escribe
+# docs/evidence/<fecha>-parity.md y el bloque de cifras de
+# docs/issues/models-fhirpath-model-gaps.md.
+parity: fetch
+	scripts/fetch-packages.sh $(CURDIR)/scripts/examples.sha256 >/dev/null
+	cd parity && FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages EXAMPLES_PACKAGES=$(CURDIR)/.cache/packages \
+		PARITY_REPORT=$(CURDIR)/docs/evidence/$$(date +%Y-%m-%d)-parity.md PARITY_ISSUE=$(CURDIR)/docs/issues/models-fhirpath-model-gaps.md \
+		go test -count=1 -v ./...
 
 # Dorado de Conflicts() por versión (testdata/golden, plan 002): lo reescribe con
 # los packages oficiales. Revisar siempre el diff.
 .PHONY: golden
 golden: fetch
-	FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages go test -count=1 -run '^(TestRealConflictsGolden|TestRealResourceTypesFile)$$' . -update
+	FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages go test -count=1 -run '^(TestRealConflictsGolden|TestRealResourceTypesFile|TestRealModelTypesGolden)$$' . -update
 
 # Fuzzing corto de los lectores y del canónico y las versiones (FUZZTIME por objetivo).
 FUZZTIME ?= 30s
@@ -48,6 +63,7 @@ fuzz:
 	go test -run '^$$' -fuzz '^FuzzReadTgz$$' -fuzztime $(FUZZTIME) .
 	go test -run '^$$' -fuzz '^FuzzParseCanonical$$' -fuzztime $(FUZZTIME) .
 	go test -run '^$$' -fuzz '^FuzzCompareVersions$$' -fuzztime $(FUZZTIME) .
+	go test -run '^$$' -fuzz '^FuzzModelFromStructureDefinition$$' -fuzztime $(FUZZTIME) .
 
 # Reporte del grafo (plan 001, pieza F): para cada raíz candidata de
 # scripts/graph-candidates.txt, el grafo, los núcleos ajenos, las versiones
@@ -82,3 +98,11 @@ validator-graph:
 	scripts/fetch-packages.sh >/dev/null
 	scripts/fetch-hl7.sh >/dev/null
 	python3 -I scripts/validator_graph.py
+
+# Evidencia de la ADR-004 (D1 a D3): qué nombres de tipo acepta el validador de
+# HL7 en `as(T)`. Necesita Java y el jar de scripts/validator.sha256; un solo JVM.
+.PHONY: validator-types
+validator-types:
+	scripts/fetch-packages.sh >/dev/null
+	scripts/fetch-hl7.sh >/dev/null
+	python3 -I scripts/validator_types.py

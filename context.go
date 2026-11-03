@@ -110,6 +110,7 @@ type Context struct {
 	concrete   []string                     // los que no son abstractos, ordenados
 	chains     map[string][]string          // tipo -> él y sus bases por baseDefinition
 	spByType   map[string][]SearchParameter // resultado de SearchParameters
+	model      *Model                       // plan 003: se construye en NewContext
 }
 
 // commonDoc son los campos que deciden entre candidatos, comunes a los
@@ -141,6 +142,9 @@ type sdDoc struct {
 	Type           string `json:"type"`
 	Abstract       bool   `json:"abstract"`
 	BaseDefinition string `json:"baseDefinition"`
+	// Snapshot solo dice si el StructureDefinition lo trae; sus elementos se
+	// leen aparte, para los tipos que se usan (modelbuild.go).
+	Snapshot *struct{} `json:"snapshot"`
 }
 
 // stringList lee un campo que es una cadena o una lista de cadenas
@@ -293,6 +297,10 @@ func NewContext(set *Set) (*Context, error) {
 		return nil, err
 	}
 	if err := c.buildSearchParameters(keys, docs); err != nil {
+		return nil, err
+	}
+	var err error
+	if c.model, err = c.buildModel(keys, docs); err != nil {
 		return nil, err
 	}
 	sort.Slice(c.conflicts, func(i, j int) bool {

@@ -172,7 +172,9 @@ func runContext(args []string) error {
 		}
 		fmt.Printf("%s conflicts: %s\n", kind, strings.Join(parts, ", "))
 	}
-	fmt.Printf("%s: FHIR %s, %d resource types, NewContext %s, heap retained by the Context %d MB\n",
-		*lockFile, set.FHIRVersion(), len(c.ResourceTypes()), elapsed.Round(time.Millisecond), (int64(after.HeapAlloc)-int64(before.HeapAlloc))>>20)
+	// El modelo de tipos se construye dentro de NewContext (plan 003, D4): su
+	// tiempo y su heap ya están en las cifras de abajo.
+	fmt.Printf("%s: FHIR %s, %d resource types, %d model types, NewContext %s, heap retained by the Context %d MB\n",
+		*lockFile, set.FHIRVersion(), len(c.ResourceTypes()), len(c.Model().Types()), elapsed.Round(time.Millisecond), (int64(after.HeapAlloc)-int64(before.HeapAlloc))>>20)
 	return nil
 }

@@ -25,6 +25,33 @@ const (
 	derivationConstraint = "constraint"
 )
 
+// Vocabulario de StructureDefinition del modelo de tipos (plan 003 §7).
+const (
+	// kindLogical: un modelo lógico no es un tipo que tenga instancias
+	// (structuredefinition.html, ValueSet structure-definition-kind).
+	kindLogical = "logical"
+	// kindPrimitive: un tipo primitivo (structure-definition-kind).
+	kindPrimitive = "primitive-type"
+	// derivationSpecialization: el SD define un tipo propio (type-derivation-rule).
+	// La raíz de R4 (Element, Resource) no declara derivation.
+	derivationSpecialization = "specialization"
+	// choiceSuffix: el nombre de un elemento con varios tipos
+	// (elementdefinition.html, «Choice types»: value[x]).
+	choiceSuffix = "[x]"
+	// urlFHIRTypeExtension: la extensión que da el tipo FHIR de un elemento
+	// cuyo código es un tipo del sistema de FHIRPath
+	// (extension-structuredefinition-fhir-type.html).
+	urlFHIRTypeExtension = "http://hl7.org/fhir/StructureDefinition/structuredefinition-fhir-type"
+	// systemTypePrefix: prefijo de los códigos de tipo del sistema de FHIRPath
+	// (http://hl7.org/fhirpath/System.String...), que un elemento declara en
+	// type.code junto a la extensión fhir-type
+	// (extension-structuredefinition-fhir-type.html; fhirpath.html).
+	systemTypePrefix = "http://hl7.org/fhirpath/System."
+	// maxUnbounded: ElementDefinition.max cuando no hay tope
+	// (elementdefinition.html).
+	maxUnbounded = "*"
+)
+
 // Códigos de PublicationStatus (ValueSet publication-status, R4 y R5). El
 // orden entre ellos no es de la especificación: es la decisión de ADR-003.
 const (
@@ -70,6 +97,15 @@ var jsonFieldSources = map[string]string{
 	"abstract":               "structuredefinition.html: StructureDefinition.abstract",
 	"derivation":             "structuredefinition.html: StructureDefinition.derivation",
 	"type":                   "structuredefinition.html: StructureDefinition.type; packages.html: package.json type",
+	"snapshot":               "structuredefinition.html: StructureDefinition.snapshot",
+	"element":                "elementdefinition.html: StructureDefinition.snapshot.element",
+	"path":                   "elementdefinition.html: ElementDefinition.path y .base.path",
+	"min":                    "elementdefinition.html: ElementDefinition.min",
+	"max":                    "elementdefinition.html: ElementDefinition.max",
+	"targetProfile":          "elementdefinition.html: ElementDefinition.type.targetProfile",
+	"extension":              "element.html: Element.extension",
+	"valueUrl":               "extension-structuredefinition-fhir-type.html: valueUrl",
+	"contentReference":       "elementdefinition.html: ElementDefinition.contentReference",
 	"contained":              "domainresource.html: DomainResource.contained",
 	"id":                     "resource.html: Resource.id",
 	"canonical":              "packages.html: package.json canonical",

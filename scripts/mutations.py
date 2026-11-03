@@ -176,6 +176,99 @@ muts = {
  "R1-Y9-unresolved-SD-tolerated": [("searchparameters.go", "\t\tif g.dec.winner == nil {\n\t\t\tfor _, cd := range g.cands {", "\t\tif g.dec.winner == nil {\n\t\t\tcontinue\n\t\t\tfor _, cd := range g.cands {")],
  "R1-Y10-sp-without-base-silently-and-code-check-first": [("searchparameters.go", "\t\tif d.Code == \"\" {\n\t\t\treturn fmt.Errorf(\"%s: %s: search parameter %s has no code\", w.pkgID", "\t\tif d.Code == \"zz\" {\n\t\t\treturn fmt.Errorf(\"%s: %s: search parameter %s has no code\", w.pkgID")],
  "R1-Y11-lastupdated-text-compare": [("cascade.go", "\t\tif t.After(best) {", "\t\tif t.String() > best.String() {")],
+ # Plan 003: el modelo de tipos (reglas de §3.2, D4, H3 y H10). Los P-* corren solo
+ # los oráculos de parity/ (el módulo aparte con models).
+ "M116-type-rule-logical-accepted": [("modelbuild.go", "d != nil && d.Kind != kindLogical && d.Snapshot != nil &&", "d != nil && d.Snapshot != nil &&")],
+ "M117-type-rule-snapshot-not-required": [("modelbuild.go", "d != nil && d.Kind != kindLogical && d.Snapshot != nil &&", "d != nil && d.Kind != kindLogical &&")],
+ "M118-type-rule-constraint-accepted": [("modelbuild.go", "(d.Derivation == derivationSpecialization || (d.Derivation == \"\" && d.BaseDefinition == \"\"))", "true")],
+ "M119-type-rule-root-without-derivation-rejected": [("modelbuild.go", "(d.Derivation == derivationSpecialization || (d.Derivation == \"\" && d.BaseDefinition == \"\"))", "d.Derivation == derivationSpecialization")],
+ "M120-parent-by-last-url-segment": [("modelbuild.go", "\t\t\td.parent = docs[cd].sd.Type\n", "\t\t\t_ = cd\n\t\t\td.parent = d.doc.BaseDefinition[strings.LastIndex(d.doc.BaseDefinition, \"/\")+1:]\n")],
+ "M121-parent-need-not-be-a-type": [("modelbuild.go", "\t\t\tif _, ok := defs[d.parent]; !ok {", "\t\t\tif false {")],
+ "M122-issubtype-not-transitive": [("model.go", "for cur := child; cur != \"\"; cur = m.types[cur].parent {", "for cur := child; cur != \"\"; cur = \"\" {")],
+ "M123-isresource-with-abstracts": [("modelbuild.go", "resource: d.doc.Kind == kindResource && !d.doc.Abstract}", "resource: d.doc.Kind == kindResource}")],
+ "M124-isresource-without-kind": [("modelbuild.go", "resource: d.doc.Kind == kindResource && !d.doc.Abstract}", "resource: !d.doc.Abstract}")],
+ "M125-slices-as-children": [("modelbuild.go", "\t\tif isSlice(e) {\n\t\t\tcontinue\n\t\t}\n\t\ti := strings", "\t\tif false {\n\t\t\tcontinue\n\t\t}\n\t\ti := strings")],
+ "M126-choice-types-sorted": [("modelbuild.go", "\t\t\tm.choices[basePath] = codes\n", "\t\t\tm.choices[basePath] = slices.Sorted(slices.Values(codes))\n")],
+ "M127-content-reference-hash-form-only": [("modelbuild.go", "from, to, ok := strings.Cut(e.ContentReference, \"#\")", "to, ok := strings.CutPrefix(e.ContentReference, \"#\")\n\t\t\tfrom := \"\"")],
+ "M128-content-reference-keeps-the-url": [("modelbuild.go", "\t\t\tm.elsewhere[e.Path] = to\n", "\t\t\tm.elsewhere[e.Path] = e.ContentReference\n\t\t\t_ = to\n")],
+ "M129-targets-not-deduplicated": [("modelbuild.go", "\t\t\t\t\tif !slices.Contains(out, tt) {", "\t\t\t\t\tif true {")],
+ "M130-targets-by-url-segment": [("modelbuild.go", "\tb.targets[profile] = sd.Type\n\treturn sd.Type, nil", "\tt := profile[strings.LastIndex(profile, \"/\")+1:]\n\tb.targets[profile] = t\n\treturn t, nil")],
+ "M131-typeof-takes-one-of-several": [("modelbuild.go", "\t\tif len(codes) == 1 {\n\t\t\tm.pathType[e.Path] = codes[0]", "\t\tif len(codes) >= 1 {\n\t\t\tm.pathType[e.Path] = codes[0]")],
+ "M132-variant-without-capital": [("modelbuild.go", "variant := basePath + upperFirst(code)", "variant := basePath + code")],
+ "M133-primitive-value-has-a-fhir-type": [("modelbuild.go", "\tif d.doc.Kind == kindPrimitive {\n\t\troot, _, _", "\tif false {\n\t\troot, _, _")],
+ "M134-fhir-type-of-several-types": [("modelbuild.go", "\t\tif len(e.Type) == 1 {\n\t\t\tb.addFHIRType(d, e, e.Path)", "\t\tif len(e.Type) >= 1 {\n\t\t\tb.addFHIRType(d, e, e.Path)")],
+ "M135-fhir-type-extension-url-not-checked": [("modelbuild.go", "if x.URL == urlFHIRTypeExtension && x.ValueURL != \"\" {", "if x.ValueURL != \"\" {")],
+ "M136-primitive-own-elements-dropped": [("modelbuild.go", "\t\tparent, name := e.Path[:i], e.Path[i+1:]\n", "\t\tparent, name := e.Path[:i], e.Path[i+1:]\n\t\tif d.doc.Kind == kindPrimitive {\n\t\t\tcontinue\n\t\t}\n")],
+ "M137-fhir-version-empty": [("modelbuild.go", "version:   c.set.lock.FHIRVersion,", "version:   \"\",")],
+ "M138-cardinality-unbounded-as-one": [("modelbuild.go", "return int32(*e.Min), Unbounded, nil", "return int32(*e.Min), 1, nil")],
+ "M139-cardinality-without-variants": [("modelbuild.go", "\t\t\t\tif err := add(variant); err != nil {\n\t\t\t\t\treturn err\n\t\t\t\t}\n", "")],
+ "M140-cardinality-without-choice-base": [("modelbuild.go", "\t\t\tif err := add(basePath); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n", "")],
+ "M141-cardinality-min-max-swapped": [("modelbuild.go", "m.card[path] = cardinality{lo, hi}", "m.card[path] = cardinality{hi, lo}")],
+ "M142-two-definitions-of-a-type-tolerated": [("modelbuild.go", "\t\t\treturn nil, fmt.Errorf(\"type %q is defined by more than one structure definition (%s and %s)\", d.Type, prev.url, k.url)", "\t\t\t_ = prev\n\t\t\tcontinue")],
+ "M143-unresolved-type-definition-tolerated": [("modelbuild.go", "\t\t\t\t\treturn nil, fmt.Errorf(\"%s: the definition of type %q is unresolved (%s): no type can be taken from it\", k.url, d.Type, explainTrace(g.dec.trace))", "\t\t\t\t\t_ = d")],
+ "M144-type-inheritance-cycle-tolerated": [("modelbuild.go", "\t\t\t\treturn nil, fmt.Errorf(\"inheritance cycle through type %s: %s\", t, strings.Join(append(chain, t), \" -> \"))", "\t\t\t\tbreak")],
+ "M145-path-outside-its-type-tolerated": [("modelbuild.go", "\t\tif top != typeName {", "\t\tif _ = top; false {")],
+ "M146-repeated-path-tolerated": [("modelbuild.go", "\t\tif seen[e.Path] {", "\t\tif false {")],
+ "M147-unresolved-base-definition-tolerated": [("modelbuild.go", "\t\t\t\treturn nil, fmt.Errorf(\"%s: type %s: base definition %s does not resolve: %w\", d.cand.pkgID, name, d.doc.BaseDefinition, err)", "\t\t\t\tcontinue")],
+ "M148-content-reference-without-fragment-tolerated": [("modelbuild.go", "\t\t\tif !ok || to == \"\" {", "\t\t\tif false && (!ok || to == \"\") {")],
+ "M149-max-not-a-count-tolerated": [("modelbuild.go", "\tif err != nil || n < 0 || n > 1<<30 {", "\tif false {")],
+ "M150-min-out-of-range-tolerated": [("modelbuild.go", "\tif *e.Min < 0 || *e.Min > 1<<30 {", "\tif false {")],
+ "M151-types-shares-its-slice": [("model.go", "return append([]string(nil), m.names...)", "return m.names")],
+ "M152-unresolved-target-profile-tolerated": [("modelbuild.go", "\tcd, err := b.c.pick(nil, typeStructureDefinition, cn)\n\tif err != nil {\n\t\treturn \"\", err\n\t}\n\tsd := b.docs[cd].sd", "\tcd, err := b.c.pick(nil, typeStructureDefinition, cn)\n\tif err != nil {\n\t\treturn \"\", nil\n\t}\n\tsd := b.docs[cd].sd")],
+ "M153-variant-targets-of-all-types": [("modelbuild.go", "rs, err := refsOf(func(x string) bool { return x == code })", "rs, err := refsOf(func(x string) bool { return true })")],
+ "M154-choice-type-repeated": [("modelbuild.go", "\t\t\tif !slices.Contains(codes, t.Code) {", "\t\t\tif true {")],
+ "M155-children-in-reverse-order": [("modelbuild.go", "m.children[parent] = append(m.children[parent], name)", "m.children[parent] = append([]string{name}, m.children[parent]...)")],
+ "M156-type-without-code-tolerated": [("modelbuild.go", "\t\t\t\treturn fmt.Errorf(\"%s: %q: a type has no code\", where, e.Path)", "\t\t\t\tcontinue")],
+ "M157-model-guard-fhir-name-in-modelbuild": [("modelbuild.go", "// definesType informa si", "var leaked = \"SimpleQuantity\"\n\n// definesType informa si")],
+ "M158-model-guard-json-tag-without-source": [("modelbuild.go", "Min              *int   `json:\"min\"`", "Min              *int   `json:\"minimum\"`")],
+ # Plan 003, code review ronda 1: M1 (fallar cerrado ante snapshots incoherentes), B2
+ # y M2 (el oráculo independiente scripts/model_oracle.py sobre los núcleos).
+ "M159-content-reference-url-not-checked": [("modelbuild.go", "\t\t\tif from != \"\" {", "\t\t\tif false {")],
+ "M160-content-reference-target-not-checked": [("modelbuild.go", "\t\t\tif !seen[to] {", "\t\t\tif false {")],
+ "M161-type-code-not-checked": [("modelbuild.go", "if _, ok := b.defs[t.Code]; !ok && !b.system[t.Code] {", "if false {")],
+ "M162-system-type-codes-rejected": [("modelbuild.go", "if _, ok := b.defs[t.Code]; !ok && !b.system[t.Code] {", "if _, ok := b.defs[t.Code]; !ok {")],
+ "M163-choice-variant-collision-tolerated": [("modelbuild.go", "\t\t\t\tif seen[variant] {", "\t\t\t\tif false {")],
+ "M164-element-without-type-tolerated": [("modelbuild.go", "\t\t\treturn fmt.Errorf(\"%s: %q has neither a type nor a content reference\", where, e.Path)", "\t\t\tcontinue")],
+ "M165-choice-without-types-tolerated": [("modelbuild.go", "\t\t\t\treturn fmt.Errorf(\"%s: %q: the choice element has no types\", where, e.Path)", "\t\t\t\tcontinue")],
+ "M166-absent-cardinality-tolerated": [("modelbuild.go", "\t\treturn 0, 0, errors.New(\"min or max is absent (sdf-3)\")", "\t\t_ = errors.New\n\t\treturn 0, 0, nil")],
+ "M167-min-above-max-tolerated": [("modelbuild.go", "\tif *e.Min > n {", "\tif false {")],
+ "M168-missing-root-tolerated": [("modelbuild.go", "\tif !seen[typeName] {", "\tif false {")],
+ "M169-orphan-path-tolerated": [("modelbuild.go", "\t\tif !seen[parent] {", "\t\tif false {")],
+ "M170-slice-cardinality-not-checked": [("modelbuild.go", "\t\tlo, hi, err := cardinalityOf(e)\n\t\tif err != nil {\n\t\t\treturn fmt.Errorf(\"%s: %q: %w\", where, e.Path, err)\n\t\t}\n\t\tif isSlice(e) {\n\t\t\tcontinue\n\t\t}\n", "\t\tif isSlice(e) {\n\t\t\tcontinue\n\t\t}\n\t\tlo, hi, err := cardinalityOf(e)\n\t\tif err != nil {\n\t\t\treturn fmt.Errorf(\"%s: %q: %w\", where, e.Path, err)\n\t\t}\n")],
+ "M171-base-definition-without-derivation-is-a-type": [("modelbuild.go", "(d.Derivation == \"\" && d.BaseDefinition == \"\")", "d.Derivation == \"\"")],
+ # M2: las que sobrevivían a la ronda 1 (D y E del revisor) y sus vecinas.
+ "M172-reference-element-targets-reversed": [("modelbuild.go", "\t\tif len(rs) > 0 {\n\t\t\tm.refs[e.Path] = rs\n\t\t}", "\t\tif len(rs) > 0 {\n\t\t\tif strings.HasPrefix(codes[0], \"Codeable\") {\n\t\t\t\tslices.Reverse(rs)\n\t\t\t}\n\t\t\tm.refs[e.Path] = rs\n\t\t}")],
+ "M173-abstract-type-unbounded-as-one": [("modelbuild.go", "\t\tadd := func(path string) error {", "\t\tif d.doc.Abstract && hi == Unbounded {\n\t\t\thi = 1\n\t\t}\n\t\tadd := func(path string) error {")],
+ "M174-variant-targets-reversed": [("modelbuild.go", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tm.refs[variant] = rs\n\t\t\t\t}", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tslices.Reverse(rs)\n\t\t\t\t\tm.refs[variant] = rs\n\t\t\t\t}")],
+ "M175-variant-targets-truncated": [("modelbuild.go", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tm.refs[variant] = rs\n\t\t\t\t}", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tm.refs[variant] = rs[:1]\n\t\t\t\t}")],
+ "M176-element-targets-truncated": [("modelbuild.go", "\t\t\tm.refs[e.Path] = rs\n", "\t\t\tm.refs[e.Path] = rs[:1]\n")],
+ "M177-fhir-type-of-abstract-types-dropped": [("modelbuild.go", "func (b *modelBuilder) addFHIRType(d *typeDef, e elementDoc, path string) {\n", "func (b *modelBuilder) addFHIRType(d *typeDef, e elementDoc, path string) {\n\tif d.doc.Abstract {\n\t\treturn\n\t}\n")],
+ "M178-abstract-type-cardinality-dropped": [("modelbuild.go", "\t\t\tm.card[path] = cardinality{lo, hi}\n\t\t\treturn nil", "\t\t\tif !d.doc.Abstract {\n\t\t\t\tm.card[path] = cardinality{lo, hi}\n\t\t\t}\n\t\t\treturn nil")],
+ "M179-element-without-id-tolerated": [("modelbuild.go", "\t\tif e.ID == \"\" {", "\t\tif false {")],
+ "M180-slice-mark-in-path-tolerated": [("modelbuild.go", "\t\tif strings.Contains(e.Path, \":\") {", "\t\tif false {")],
+ "M181-content-reference-with-type-tolerated": [("modelbuild.go", "\t\t\tif len(e.Type) > 0 {\n\t\t\t\treturn fmt.Errorf(\"%s: %q: the element has a content reference", "\t\t\tif false {\n\t\t\t\treturn fmt.Errorf(\"%s: %q: the element has a content reference")],
+ "M182-content-reference-chain-tolerated": [("modelbuild.go", "\t\t\tif crs[to] {", "\t\t\tif false {")],
+ "M183-element-and-its-choice-tolerated": [("modelbuild.go", "\t\t\tif seen[basePath] {", "\t\t\tif false {")],
+ "M184-system-types-from-any-package": [("modelbuild.go", "if cd.pkgID != c.core {", "if false {")],
+ "M185-system-types-from-any-kind": [("modelbuild.go", "if !definesType(d) || d.Kind != kindPrimitive {", "if !definesType(d) {")],
+ "M186-content-reference-version-not-cut": [("modelbuild.go", "if u, _, _ := strings.Cut(from, \"|\"); u != d.url {", "if u := from; u != d.url {")],
+ "M187-single-type-choice-fhir-type-on-base": [("modelbuild.go", "b.addFHIRType(d, e, basePath+upperFirst(codes[0]))", "b.addFHIRType(d, e, basePath)")],
+ "M188-slice-detection-disabled": [("modelbuild.go", "func isSlice(e elementDoc) bool { return strings.Contains(e.ID, \":\") }", "func isSlice(e elementDoc) bool { return false }")],
+ "M189-choice-path-collision-tolerated": [("modelbuild.go", "if from, dup := claimed[path]; dup {", "if from, dup := claimed[path]; false && dup {")],
+ "M190-id-unrelated-to-path-tolerated": [("modelbuild.go", "if stripSliceNames(e.ID) != e.Path {", "if false {")],
+ "M191-slice-without-base-tolerated": [("modelbuild.go", "if !ids[sliceParentID(e.ID)] {", "if false {")],
+ "M192-slice-descendant-checked-against-base-path": [("modelbuild.go", "\t\treturn id[:last+end]\n", "\t\treturn id[:last]\n")],
+ "M193-system-type-in-choice-or-several-tolerated": [("modelbuild.go", "!ok && (len(e.Type) > 1 || strings.HasSuffix(name, choiceSuffix)) {", "!ok && false {")],
+ "M194-system-type-among-several-tolerated": [("modelbuild.go", "!ok && (len(e.Type) > 1 || strings.HasSuffix(name, choiceSuffix)) {", "!ok && strings.HasSuffix(name, choiceSuffix) {")],
+ "M195-system-type-in-choice-tolerated": [("modelbuild.go", "!ok && (len(e.Type) > 1 || strings.HasSuffix(name, choiceSuffix)) {", "!ok && len(e.Type) > 1 {")],
+ "M196-content-reference-children-tolerated": [("modelbuild.go", "if i >= 0 && crs[e.Path[:i]] {", "if false {")],
+ "M197-overridden-core-primitive-tolerated": [("modelbuild.go", "if g.dec.winner != cd {", "if false {")],
+ "P-01-classified-difference-disappears": [("modelbuild.go", "\t\t\t\t\tif !slices.Contains(out, tt) {", "\t\t\t\t\tif true {")],
+ "P-02-children-order-differs-from-models": [("modelbuild.go", "m.children[parent] = append(m.children[parent], name)", "m.children[parent] = append([]string{name}, m.children[parent]...)")],
+ "P-03-fhir-type-always-id": [("modelbuild.go", "\t\t\tb.m.fhirType[path] = x.ValueURL\n", "\t\t\tb.m.fhirType[path] = \"id\"\n")],
+ "P-04-abstract-type-elements-dropped": [("modelbuild.go", "\t\tparent, name := e.Path[:i], e.Path[i+1:]\n", "\t\tparent, name := e.Path[:i], e.Path[i+1:]\n\t\tif d.doc.Abstract {\n\t\t\tcontinue\n\t\t}\n")],
+ "P-05-choice-variants-lose-their-targets": [("modelbuild.go", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tm.refs[variant] = rs\n\t\t\t\t}", "\t\t\t\t_ = rs")],
+ "P-06-nested-backbone-typed-like-models": [("modelbuild.go", "\t\t\tm.pathType[e.Path] = codes[0]\n", "\t\t\tm.pathType[e.Path] = codes[0]\n\t\t\tif codes[0] == \"Element\" {\n\t\t\t\tm.pathType[e.Path] = \"BackboneElement\"\n\t\t\t}\n")],
 }
 
 def sha(*parts):
@@ -190,7 +283,7 @@ def tree_hash():
     for root, dirs, files in os.walk(R):
         dirs[:] = sorted(d for d in dirs if d not in (".git", ".cache", "__pycache__", "docs"))
         for f in sorted(files):
-            if f.endswith(".go") or root.startswith(os.path.join(R, "testdata")) or f in ("packages.sha256", "go.mod"):
+            if f.endswith(".go") or root.startswith(os.path.join(R, "testdata")) or f in ("packages.sha256", "go.mod", "model_oracle.py"):
                 p = os.path.join(root, f)
                 items.append(os.path.relpath(p, R))
                 items.append(open(p, "rb").read())
@@ -218,10 +311,17 @@ def run_mutation(name, pairs, tmp_root):
             if s.count(old) != 1:
                 return {"status": "error", "detail": "%s: the text appears %d times, want 1: %r" % (f, s.count(old), old[:70])}
             open(p, "w").write(s.replace(old, new))
-        env = dict(os.environ, FHIRPKG_PACKAGES=os.path.join(R, ".cache", "packages"))
+        pk = os.path.join(R, ".cache", "packages")
+        env = dict(os.environ, FHIRPKG_PACKAGES=pk, EXAMPLES_PACKAGES=pk)
+        cmd, cwd = ["go", "test", "-failfast", "-count=1", "./..."], dst
+        if name.startswith("P-"):
+            # Solo los oráculos de parity/ (otro módulo, con replace a ../../go-searchindex).
+            os.symlink(os.path.join(os.path.dirname(R), "go-searchindex"), os.path.join(work, "go-searchindex"))
+            cmd = ["go", "test", "-short", "-count=1", "-run", "TestParityWithModels|TestSearchIndexDifferential|TestFHIRPathAnalyzeDifferential|TestKnownLoss", "./..."]
+            cwd = os.path.join(dst, "parity")
         start = time.time()
         try:
-            out = subprocess.run(["go", "test", "-count=1", "./..."], cwd=dst, env=env, capture_output=True, text=True, timeout=900).stdout
+            out = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=900).stdout
         except subprocess.TimeoutExpired:
             return {"status": "detected", "detail": "timeout (the mutation hangs a test)", "by": ["timeout"], "secs": 900}
         secs = round(time.time() - start, 1)

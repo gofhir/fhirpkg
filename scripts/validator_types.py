@@ -1,0 +1,97 @@
+#!/usr/bin/env python3
+# Evidencia de la ADR-004 (D1 a D3): ¿el validador de HL7 trata SimpleQuantity,
+# MoneyQuantity, MetadataResource (R4) y DataType (R4B) como tipos de FHIRPath?
+# Evalúa con «validator_cli fhirpath» (sin red) `value.as(T)` y `value.is(T)`
+# sobre una Observation con valueQuantity, para cada T y versión. `as(T)` con un
+# nombre que no es un tipo da «The type FHIR.T is not valid»; `is(T)` no
+# comprueba el nombre y da false. El control es un nombre inventado; los
+# patrones lógicos (Event, FiveWs, Participant) muestran que `as` acepta todo
+# nombre de StructureDefinition cargada, también los que no son tipos (D2). Un solo
+# JVM a la vez. Escribe docs/evidence/<fecha>-validator-types.md.
+#
+# Uso: python3 -I scripts/validator_types.py   (lo llama make validator-types)
+import datetime, hashlib, os, re, shutil, subprocess, sys, tarfile, tempfile
+
+R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PK = os.path.join(R, ".cache", "packages")
+JAR = os.environ.get("VALIDATOR_JAR", os.path.join(R, ".cache", "hl7", "validator_cli.jar"))
+
+OBS = '{"resourceType":"Observation","status":"final","code":{"text":"x"},"valueQuantity":{"value":5,"unit":"mg","system":"http://unitsofmeasure.org","code":"mg"}}'
+
+# (versión, core, packages de terminología propios de la versión, tipos a probar)
+CASES = [
+    ("4.0.1", "hl7.fhir.r4.core-4.0.1", ["hl7.terminology.r4-6.2.0"],
+     ["Quantity", "SimpleQuantity", "MoneyQuantity", "MetadataResource", "DomainResource", "Event", "FiveWs", "NoSuchType"]),
+    ("4.3.0", "hl7.fhir.r4b.core-4.3.0", ["hl7.terminology.r4b-6.0.2"],
+     ["Quantity", "SimpleQuantity", "MoneyQuantity", "DataType", "DomainResource", "Event", "NoSuchType"]),
+    ("5.0.0", "hl7.fhir.r5.core-5.0.0", ["hl7.terminology.r5-6.2.0", "hl7.terminology.r5-7.1.0"],
+     ["Quantity", "SimpleQuantity", "MoneyQuantity", "MetadataResource", "CanonicalResource", "DataType", "Event", "Participant", "NoSuchType"]),
+]
+
+def sha256(path):
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+def extract(file, dest):
+    os.makedirs(dest, exist_ok=True)
+    real = os.path.realpath(dest)
+    with tarfile.open(file) as t:
+        for m in t:
+            target = os.path.realpath(os.path.join(dest, m.name))
+            if not target.startswith(real + os.sep) or not (m.isfile() or m.isdir()):
+                continue
+            t.extract(m, dest)
+
+def evaluate(work, home, version, expr):
+    p = subprocess.run(["java", "-Duser.home=" + home, "-jar", JAR, "fhirpath", expr, os.path.join(work, "obs.json"),
+                        "-version", version, "-tx", "n/a", "-no-http-access"],
+                       cwd=work, capture_output=True, text=True, timeout=900)
+    lines = p.stdout.splitlines()
+    for i, l in enumerate(lines):
+        if "...evaluating" in l:
+            out = [x.strip() for x in lines[i + 1:] if x.strip() and not x.startswith("Done.") and not x.strip().startswith("at ")]
+            for x in out:
+                if "Exception:" in x:
+                    return "error: " + x.split("Exception:", 1)[1].strip()
+            return out[0] if out else "(empty)"
+    return "(no result) " + p.stdout[-200:]
+
+def main():
+    want = open(os.path.join(R, "scripts", "validator.sha256")).read().split()[0]
+    if sha256(JAR) != want:
+        sys.exit("%s does not match scripts/validator.sha256" % JAR)
+    extras = [l.split()[1][:-4] for l in open(os.path.join(R, "scripts", "hl7-packages.sha256")) if l.strip()]
+    base = tempfile.mkdtemp(prefix="validator-types-", dir=os.environ.get("TMPDIR", tempfile.gettempdir()))
+    rows, bad = [], []
+    try:
+        for version, core, terms, types in CASES:
+            work = os.path.join(base, version)
+            home = os.path.join(work, "home")
+            cache = os.path.join(home, ".fhir", "packages")
+            os.makedirs(cache)
+            open(os.path.join(work, "obs.json"), "w").write(OBS)
+            for stem in sorted(set([core] + terms + extras)):
+                n, v = stem.rsplit("-", 1)
+                extract(os.path.join(PK, stem + ".tgz"), os.path.join(cache, n + "#" + v))
+            for t in types:
+                a = evaluate(work, home, version, "value.as(%s)" % t)
+                i = evaluate(work, home, version, "value.is(%s)" % t)
+                rows.append((version, t, a, i))
+                print("%-6s %-18s as: %-60s is: %s" % (version, t, a[:60], i), flush=True)
+    finally:
+        shutil.rmtree(base, ignore_errors=True)
+    stamp = datetime.datetime.now().strftime("%Y-%m-%d")
+    path = os.path.join(R, "docs", "evidence", stamp + "-validator-types.md")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, "w") as f:
+        f.write("# Type names in the HL7 validator (ADR-004, D1 to D3)\n\n")
+        f.write("Generated by `make validator-types`. validator_cli 7.0.2 (SHA-256 in `scripts/validator.sha256`), `fhirpath` subcommand, `-no-http-access`, one JVM at a time. Each expression is evaluated on an Observation with `valueQuantity`. `as(T)` with a name that is not a type fails with `The type FHIR.T is not valid`; `is(T)` does not check the name. `NoSuchType` is the control.\n\n")
+        f.write("| FHIR | T | `value.as(T)` | `value.is(T)` |\n| --- | --- | --- | --- |\n")
+        for v, t, a, i in rows:
+            f.write("| %s | %s | %s | %s |\n" % (v, t, a.replace("|", "\\|")[:120], i))
+    print(path)
+
+main()

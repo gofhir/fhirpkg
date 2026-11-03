@@ -35,6 +35,17 @@ var realCases = []struct {
 
 func realContext(t testing.TB, lock string) (*Context, *Set) {
 	t.Helper()
+	set := realSet(t, lock)
+	c, err := NewContext(set)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c, set
+}
+
+// realSet abre el Set del lock con los packages oficiales (se omite sin ellos).
+func realSet(t testing.TB, lock string) *Set {
+	t.Helper()
 	dir := os.Getenv("FHIRPKG_PACKAGES")
 	if dir == "" {
 		t.Skip("FHIRPKG_PACKAGES is not set (make check-packages)")
@@ -47,11 +58,7 @@ func realContext(t testing.TB, lock string) (*Context, *Set) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c, err := NewContext(set)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return c, set
+	return set
 }
 
 func countBy(c *Context, kind Kind) map[Step]int {

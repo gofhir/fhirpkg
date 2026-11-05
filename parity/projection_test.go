@@ -94,6 +94,7 @@ func errSig(err error) string {
 }
 
 func TestProjectionParity(t *testing.T) {
+	t.Parallel() // plan 005 §18: las tres pruebas largas e independientes corren juntas
 	// PARITY_CORPUS=fast (scripts/mutations.py): solo los ejemplos oficiales y
 	// `hand`, sin Synthea ni generados, parando en el primer desacuerdo y sin
 	// comparar los pins (que son del corpus completo).

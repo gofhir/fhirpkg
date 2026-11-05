@@ -1,6 +1,19 @@
-.PHONY: check fmt vet test ci parity
+.PHONY: check fmt vet test ci parity lint vuln
 
 check: fmt vet test
+
+# Se corren con go run para que coincidan con CI sin instalar nada. Mantener las
+# versiones al día con GOLANGCI_VERSION y GOVULNCHECK_VERSION de
+# .github/workflows/ci.yml. Lint cubre el módulo de la raíz; parity/ es otro
+# módulo (ver docs/plans/README.md, hallazgos de lint).
+GOLANGCI_VERSION := v2.15.0
+GOVULNCHECK_VERSION := v1.7.0
+
+lint:
+	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION) run ./...
+
+vuln:
+	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 
 # Lo que corre CI: check más las pruebas con los packages oficiales.
 ci: check check-packages

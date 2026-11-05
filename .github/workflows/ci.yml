@@ -8,7 +8,40 @@ on:
 # generados (plan 004 D3): se clona al lado, como en el árbol local
 # (../go-searchindex). El repo es privado, así que necesita el secreto
 # SEARCHINDEX_TOKEN (token de solo lectura del contenido de gofhir/searchindex).
+env:
+  GO_VERSION: "1.26"
+  # Fijadas, no «latest»: un linter que se actualiza solo pone en rojo un commit
+  # ajeno, y el formato de .golangci.yml depende de la versión. Mantener
+  # GOLANGCI_VERSION y GOVULNCHECK_VERSION al día con el Makefile.
+  GOLANGCI_VERSION: "v2.15.0"
+  GOVULNCHECK_VERSION: "v1.7.0"
+
 jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - uses: golangci/golangci-lint-action@v9
+        with:
+          version: ${{ env.GOLANGCI_VERSION }}
+
+  # Vulnerabilidades alcanzables desde el código, en dependencias y en la
+  # biblioteca estándar. Usa la última 1.26.x (GO_VERSION), no el 1.26.0 de
+  # go.mod, que arrastra los avisos ya corregidos de la estándar.
+  vuln:
+    name: Govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      - run: go run golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }} ./...
+
   ci:
     runs-on: ubuntu-latest
     steps:

@@ -285,3 +285,21 @@ Informe `/Volumes/dev/tmp/codex-o3.md`; reproductor `/Volumes/dev/tmp/review-fhi
 
 **Verificación.** `make check` verde; `make mutations` completa, 395 de 395 detectadas, sin estados `error`, sin reutilizar la caché: [`2026-11-05-1238-mutations.md`](../evidence/2026-11-05-1238-mutations.md); `make check-packages` verde en 12 min 4 s (tope 15 min; con la máquina cargada por otros procesos, por eso el `go test` de `parity/` lleva `-timeout 20m`: dos corridas con el tope por defecto de 10 min lo agotaron); reporte de `make evidence`: [`2026-11-05-1431.md`](../evidence/2026-11-05-1431.md).
 
+## 18. Costo en CI (05-11-2026)
+
+**Hallazgo.** En GitHub Actions (4 vCPU, Go 1.26) `make ci` agotó el `-timeout 20m` del módulo `parity/`: `TestProjectionParity` 12 min 26 s (Synthea R4: 557 entradas en 9 min 28 s; local, 4 min 43 s), `TestNormalizeBenchmark` 218 s, y antes el módulo raíz 233 s. El tope del §13.3 (`make check-packages` no pasa de 15 min) no se cumplía en CI (cerca de 27 min proyectados).
+
+**Medición local (máquina cargada, load 14 a 17 sobre 12 núcleos), Synthea R4, 534 recursos, 3204 pares, 890 MB.** El oráculo (Python, un hilo, un proceso por versión) tarda 249 s de los 283 s; `Project` suma 15,6 s (6 %); el resto es el reparto. Los recursos de Synthea pesan 1,7 MB de media y cada modo reparsea la entrada completa en el oráculo, así que el costo es el parseo, no el número de listas de `_elements` (un Bundle solo da 2 listas de 6 pares). Oficiales R4/R4B/R5: 21/14/19 s de oráculo; generados: 5 a 10 s.
+
+**Cambios.**
+1. **Un grupo de procesos del oráculo por versión** (`oracleWorkers`: uno por núcleo, hasta 4; `PARITY_ORACLES=<n>` lo fija) con un reparto de recursos entre ellos (`poolRun`; a lo sumo un recurso en vuelo y otro esperando por proceso). El informe de reglas suma los de los procesos. La comparación es idéntica (`compareResource` no cambió de criterio; solo devuelve el error en vez de llamar a `t.Fatal`, que no vale fuera de la goroutine del test), el hash y los pins son los mismos y los desacuerdos salen ordenados. Sin carrera (`go test -race`, corpus rápido). Synthea R4: 4 min 43 s a 1 min 31 s; `TestProjectionParity` completo: 376 s a 128 s; RSS pico de los cuatro procesos del oráculo: 1,06 GB (unos 265 MB cada uno) más el proceso de test (902 MB).
+2. **`TestNormalizeBenchmark` fuera de `make check-packages`** (`PARITY_BENCH=0`; con él, `TestMain` tampoco reescribe el reporte de evidencia, que quedaría sin la tabla). Razón: el propio test dice «informativo, sin umbrales», no afirma nada que pueda fallar, y el plan 004 §4 (paso 4) lo pide como **evidencia** en el reporte de la paridad, no como puerta; `make parity` y `make evidence` lo siguen corriendo y escribiendo. Mide con procesos hijos por ejemplo y cuesta 218 s en CI. No se pierde ninguna comprobación.
+3. **`TestProjectionParity`, `TestNormalizerParity` y `TestFHIRPathEvaluationDifferential` con `t.Parallel()`**: son largos, independientes y sus acumuladores van con mutex; corren después de todos los tests seriales (el benchmark de modelos y la retención de memoria siguen solos). El módulo `parity/` pasó de 262 s a 202 s localmente con el pico de RSS en 2,9 GB (los cuatro procesos del oráculo más el test).
+4. `scripts/mutations.py` fija `PARITY_ORACLES=2` en la etapa rápida de paridad (con 3 workers de mutación serían 12 procesos Python).
+
+**No se tocó** `scripts/projection_oracle.py` (congelado) ni el corpus: sigue completo en `true`, `text`, `data` y `false`, y las tres listas de `_elements`; los pins de `parity/testdata/projection.json` no cambiaron. La reducción de la muestra de `_elements` (§13.3) no hizo falta y queda de reserva: en Synthea ahorraría 1 de 6 pares.
+
+**Estimación para CI** (razón CI/local medida en la corrida fallida: 1,9 a 2,7): `make check-packages` unos 10 a 11 min, contra 15.
+
+
+**Verificación (05-11-2026).** `make check` verde. `make check-packages` verde en 6 min 5 s locales (antes 12 min 4 s, §17; el módulo `parity/` 160 s). Mutaciones `PR-*` y `O-*` con `MUTATION_FRESH=1`: 65 de 65 detectadas, sin `error`, 20 min: [`2026-11-05-1746-mutations.md`](../evidence/2026-11-05-1746-mutations.md).

@@ -4,6 +4,8 @@ Se actualiza al terminar cada paso (carta `NUCLEO.md` §10). **Leer primero al r
 
 ## Ahora
 
+**Actualización 05-11-2026 (plan 005, costo en CI, rama `fix/parity-cost`, [plan §18](005-proyeccion.md)):** `make ci` agotaba los 20 min del módulo `parity/` en GitHub Actions (Synthea R4 9 min 28 s; `TestNormalizeBenchmark` 218 s). El oráculo Python era el 94 % del costo: ahora un grupo de hasta 4 procesos por versión (`PARITY_ORACLES`), `TestNormalizeBenchmark` solo en `make parity`/`make evidence` (`PARITY_BENCH=0` en `check-packages`) y las tres pruebas largas en paralelo. Local: `TestProjectionParity` 376 s a 128 s, Synthea 4 min 43 s a 1 min 31 s; el corpus, los pins y el oráculo no cambian. **Próximo paso:** que el usuario revise la rama (sin push ni PR) y confirme la corrida de CI.
+
 **Actualización 04-11-2026 (fhirpkg plan 005, implementación):** proyección `_summary`/`_elements` implementada, sin commit ([plan §9](005-proyeccion.md), [ADR-005](../adr/005-proyeccion.md)). `make check` y `make check-packages` verdes; `make hl7-projection`, `make hapi-projection` y mutaciones PR-* listos. **Próximo paso:** code review ronda 1 (Codex).
 
 **Actualización 04-11-2026 (plan 005, D8 ampliada):** el usuario aprobó el 04-11-2026 que un primitivo `min>0` conserve entero el par `x`/`_x` (caso R5 `QuestionnaireResponse.questionnaire`); implementado, con casos a mano, mutación PR-28, clase D8 fuera de `divergences.json` y pins de paridad y HAPI actualizados ([plan §4 y §9](005-proyeccion.md), [ADR-005](../adr/005-proyeccion.md)). **Próximo paso sin cambio:** code review ronda 1 (Codex).

@@ -226,10 +226,16 @@ func TestBenchChild(t *testing.T) {
 	runtime.KeepAlive(raw)
 }
 
-// TestNormalizeBenchmark mide los ejemplos escogidos. Informativo, sin umbrales.
+// TestNormalizeBenchmark mide los ejemplos escogidos. Informativo, sin umbrales:
+// es evidencia del plan 004 §4 (paso 4), no una puerta de `make check-packages`
+// (plan 005 §18), que lo omite con PARITY_BENCH=0; `make parity` y
+// `make evidence` lo corren.
 func TestNormalizeBenchmark(t *testing.T) {
 	if testing.Short() {
 		t.Skip("-short")
+	}
+	if benchOff() {
+		t.Skip("PARITY_BENCH=0 (make check-packages); make parity runs it")
 	}
 	for _, v := range loadVersions(t) {
 		for _, pick := range benchPicks(t, v.name) {
@@ -286,3 +292,7 @@ func rowText(r benchRowN) string {
 	}
 	return fmt.Sprintf("%d bytes, %.2f ms/op, %d allocs/op, %d B/op, +%d MB RSS", r.Size, float64(r.NsPerOp)/1e6, r.AllocsPerOp, r.BytesPerOp, r.RSSMB)
 }
+
+// benchOff dice si la corrida omite los benchmarks informativos (y, con ellos, el
+// reporte de evidencia, que quedaría incompleto).
+func benchOff() bool { return os.Getenv("PARITY_BENCH") == "0" }

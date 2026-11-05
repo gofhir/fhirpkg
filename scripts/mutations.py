@@ -36,19 +36,19 @@ muts = {
  "M04-double-version-picks-one": [("resolve.go", "if len(a.Doubles) > 0 {", "if false && len(a.Doubles) > 0 {")],
  "M05-legacy-version-list-ignored": [("manifest.go", "case len(raw.FHIRVersionList) > 0:", "case false && len(raw.FHIRVersionList) > 0:")],
  "M06-unsafe-tgz-accepted": [("tgz.go", "if err := checkEntryName(h.Name); err != nil {", "if err := checkEntryName(h.Name); false && err != nil {")],
- "M07-links-accepted": [("tgz.go", "case tar.TypeDir:\n\t\t\tcontinue", "case tar.TypeDir, tar.TypeSymlink, tar.TypeLink:\n\t\t\tcontinue")],
- "M08-entry-size-limit-ignored": [("tgz.go", "if h.Size < 0 || h.Size > lim.MaxEntry {", "if h.Size < 0 {")],
- "M09-total-size-limit-ignored": [("tgz.go", "if total > lim.MaxTotal {", "if false {")],
- "M10-duplicate-entry-accepted": [("tgz.go", "if seen[name] {", "if false {")],
+ "M07-links-accepted": [("tgz.go", "case tar.TypeDir:\n\t\treturn true, nil", "case tar.TypeDir, tar.TypeSymlink, tar.TypeLink:\n\t\treturn true, nil")],
+ "M08-entry-size-limit-ignored": [("tgz.go", "if h.Size < 0 || h.Size > s.lim.MaxEntry {", "if h.Size < 0 {")],
+ "M09-total-size-limit-ignored": [("tgz.go", "if s.total > s.lim.MaxTotal {", "if false {")],
+ "M10-duplicate-entry-accepted": [("tgz.go", "if s.seen[name] {", "if false {")],
  "M11-cycle-tolerated": [("resolve.go", "if len(a.Cycle) > 0 {", "if false && len(a.Cycle) > 0 {")],
  "M12-unused-exception-tolerated": [("resolve.go", "if len(unused) > 0 {", "if false {")],
  "M13-foreign-package-needs-no-exception": [("resolve.go", "if _, ok := exc[id]; ok {", "if true {")],
  "M14-wildcard-picks-lowest": [("version.go", "compareSemver(sv, best) > 0", "compareSemver(sv, best) < 0")],
  "M15-wildcard-takes-prerelease": [("version.go", "if !ok || sv.pre != \"\" || fmt.Sprintf(\"%d.%d\", sv.major, sv.minor) != v.prefix {", "if !ok || fmt.Sprintf(\"%d.%d\", sv.major, sv.minor) != v.prefix {")],
- "M16-open-skips-series-check": [("open.go", "!slices.Contains(m.Series(), coreSeries) && !exc[id]", "false")],
+ "M16-open-skips-series-check": [("open.go", "!slices.Contains(m.Series(), coreSeries) && !excepted", "false")],
  "M17-open-skips-manifest-check": [("open.go", "if err := matchLocked(c.manifest, lp); err != nil {", "if err := matchLocked(c.manifest, lp); false && err != nil {")],
  "M18-subfolder-files-read": [("tgz.go", "if !ok || strings.Contains(rest, \"/\") {", "if !ok {")],
- "M19-root-order-matters": [("graph.go", "\tsort.Strings(sorted)\n\tg := &Graph", "\t_ = sort.Strings\n\tg := &Graph")],
+ "M19-root-order-matters": [("graph.go", "\tsort.Strings(sorted)\n\tx := &explorer", "\t_ = sort.Strings\n\tx := &explorer")],
  "M20-core-with-several-versions-accepted": [("graph.go", "if len(m.FHIRVersions) != 1 {", "if len(m.FHIRVersions) < 1 {")],
  "M21-lock-order-not-checked": [("lock.go", "if j, ok := pos[d]; ok && j >= i {", "if j, ok := pos[d]; ok && j >= i && false {")],
  "M22-version-range-accepted": [("version.go", "strings.ContainsAny(s, \" \\t\\n^~<>=|#/\")", "false")],
@@ -64,7 +64,7 @@ muts = {
  "M32-excluded-non-core-accepted": [("open.go", "\t\tif !m.IsCore() {\n\t\t\treturn nil, fmt.Errorf(\"%s: excluded, but", "\t\tif false {\n\t\t\treturn nil, fmt.Errorf(\"%s: excluded, but")],
  "M33-excluded-core-of-the-locks-series-accepted": [("open.go", "\t\tif len(m.Series()) == 0 || slices.Contains(m.Series(), coreSeries) {\n\t\t\treturn nil, fmt.Errorf(\"%s: excluded", "\t\tif false {\n\t\t\treturn nil, fmt.Errorf(\"%s: excluded")],
  "M34-excluded-packages-not-verified": [("open.go", "\t\tif !lp.Excluded {\n\t\t\tcontinue", "\t\tif true {\n\t\t\tcontinue")],
- "M35-lock-core-need-not-be-core": [("open.go", "if id == lock.Core && !m.IsCore() {", "if false {")],
+ "M35-lock-core-need-not-be-core": [("open.go", "if id == lockCore && !m.IsCore() {", "if false {")],
  "M36-excluded-root-accepted": [("lock.go", "\t\tif rp.Excluded {", "\t\tif false && rp.Excluded {")],
  "M37-undeclared-counts-cores": [("graph.go", "len(n.Manifest.FHIRVersions) == 0 && !n.Manifest.IsCore()", "len(n.Manifest.FHIRVersions) == 0")],
  "M38-lock-duplicate-dependency-accepted": [("lock.go", "if depNames[name] {", "if false {")],
@@ -72,7 +72,9 @@ muts = {
  "M40-excluded-core-without-series-accepted": [("open.go", "len(m.Series()) == 0 || slices.Contains(m.Series(), coreSeries)", "slices.Contains(m.Series(), coreSeries)")],
  "M41-scan-without-resources-stops-at-the-manifest": [("tgz.go", "\t\t\tmanifest = body\n\t\t\tcontinue", "\t\t\tmanifest = body\n\t\t\tif !withResources {\n\t\t\t\tbreak\n\t\t\t}\n\t\t\tcontinue")],
  "M42-excluded-verified-after-the-main-loop": moved_excluded_block(),
- "M44-gzip-trailer-not-verified": [("tgz.go", "if _, err := io.Copy(io.Discard, zr); err != nil {", "if _, err := io.Copy(io.Discard, zr); false && err != nil {")],
+ "M44-gzip-trailer-not-verified": [("tgz.go", "\t\t\treturn fmt.Errorf(\"invalid gzip stream: %w\", err)", "\t\t\treturn nil")],
+ "M44b-trailing-padding-unbounded": [("tgz.go", "if total > maxTrailingPadding {", "if false {")],
+ "M44c-trailing-padding-may-be-data": [("tgz.go", "\t\t\tif c != 0 {", "\t\t\tif c != 0 && false {")],
  "M43-scan-without-resources-ignores-tar-errors": [("tgz.go", "\t\t\treturn nil, fmt.Errorf(\"invalid tar: %w\", err)", "\t\t\tif !withResources {\n\t\t\t\tbreak\n\t\t\t}\n\t\t\treturn nil, fmt.Errorf(\"invalid tar: %w\", err)")],
  # Plan 002: la cascada de canónicos, la regla de base:code y la herencia.
  "M45-series-step-off": [("cascade.go", "\t\tif !declaresOtherSeries(c.info.fhirVersions, coreSeries) {", "\t\tif true {")],
@@ -129,7 +131,7 @@ muts = {
  "M96-date-accepts-year-zero": [("order.go", " || y == \"0000\"", "")],
  "M97-natural-compares-digits-as-text": [("order.go", "\t\t\tif c := cmpDigits(ta, tb); c != 0 {", "\t\t\tif c := strings.Compare(ta, tb); c != 0 {")],
  "M98-searchparameter-without-base-is-an-error": [("searchparameters.go", "\t\t\tcontinue\n\t\t}\n\t\tif d.Code == \"\" {\n\t\t\treturn fmt.Errorf(\"%s: %s: search parameter %s has no code\", w.pkgID", "\t\t\treturn fmt.Errorf(\"no base\")\n\t\t}\n\t\tif d.Code == \"\" {\n\t\t\treturn fmt.Errorf(\"%s: %s: search parameter %s has no code\", w.pkgID")],
- "M99-unresolved-sp-canonical-falls-back-to-the-first-candidate": [("searchparameters.go", "\t\t\tif err := collectUnresolved(k.url, c.groups[k].cands, docs, unresolvedBC, disagree); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t\tcontinue", "\t\t\tw = c.groups[k].cands[0]")],
+ "M99-unresolved-sp-canonical-falls-back-to-the-first-candidate": [("searchparameters.go", "\t\t\tif err := collectUnresolved(k.url, c.groups[k].cands, docs, unresolvedBC, disagree); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t\tcontinue", "\t\t\t_, _ = unresolvedBC, disagree\n\t\t\tw = c.groups[k].cands[0]")],
  "M100-guard-bypass-strings-fields": [("context.go", "func candidateList(cs []*cand) string {", "var leaked = strings.Fields(\"ValueSet CodeSystem\")\n\nfunc candidateList(cs []*cand) string {")],
  "M101-guard-bypass-leading-space": [("context.go", "func candidateList(cs []*cand) string {", "var leaked = \" SearchParameter\"\n\nfunc candidateList(cs []*cand) string {")],
  "M102-guard-bypass-in-a-001-file": [("lock.go", "// LockSchema es la versión", "var leaked = \"lastUpdated\"\n\n// LockSchema es la versión")],
@@ -150,7 +152,7 @@ muts = {
  "R1-X2-basecode-allfail-no-fallback": [("searchparameters.go", "\t\t\tnext = cur // todos pierden: el paso no separa", "\t\t\t_ = next")],
  "R1-X3-unresolved-resource-SD-tolerated": [("searchparameters.go", "\t\t\t\t\treturn fmt.Errorf(\"%s: the definition of resource type %q is unresolved (%s): no type can be taken from it\", k.url, d.Type, explainTrace(g.dec.trace))", "\t\t\t\t\t_ = d")],
  "R1-X4-duplicate-type-tolerated": [("searchparameters.go", "\t\t\treturn fmt.Errorf(\"resource type %q is defined by more than one structure definition (%s and %s)\", d.Type, prev.url, k.url)", "\t\t\t_ = prev")],
- "R1-X5-cycle-tolerated": [("searchparameters.go", "\t\t\t\treturn fmt.Errorf(\"inheritance cycle through resource type %s: %s\", p, strings.Join(append(chain, p), \" -> \"))", "\t\t\t\tbreak")],
+ "R1-X5-cycle-tolerated": [("searchparameters.go", "\t\t\t\treturn nil, fmt.Errorf(\"inheritance cycle through resource type %s: %s\", p, strings.Join(append(chain, p), \" -> \"))", "\t\t\t\tbreak")],
  "R1-X6-typefor-ignores-visibility": [("context.go", "\t\tif len(c.visibleCands(c.groups[key{t, url}], vis)) > 0 {", "\t\tif len(c.visibleCands(c.groups[key{t, url}], nil)) > 0 {")],
  "R1-X7-base-not-deduped": [("searchparameters.go", "\t\t\tif !seen[b] {", "\t\t\tif true {")],
  "R1-X8-empty-pkg-canonical-is-copy": [("cascade.go", "\treturn p != \"\" && r != \"\" && p != r", "\treturn r != \"\" && p != r")],
@@ -206,12 +208,12 @@ muts = {
  "M141-cardinality-min-max-swapped": [("modelbuild.go", "m.card[path] = cardinality{lo, hi}", "m.card[path] = cardinality{hi, lo}")],
  "M142-two-definitions-of-a-type-tolerated": [("modelbuild.go", "\t\t\treturn nil, fmt.Errorf(\"type %q is defined by more than one structure definition (%s and %s)\", d.Type, prev.url, k.url)", "\t\t\t_ = prev\n\t\t\tcontinue")],
  "M143-unresolved-type-definition-tolerated": [("modelbuild.go", "\t\t\t\t\treturn nil, fmt.Errorf(\"%s: the definition of type %q is unresolved (%s): no type can be taken from it\", k.url, d.Type, explainTrace(g.dec.trace))", "\t\t\t\t\t_ = d")],
- "M144-type-inheritance-cycle-tolerated": [("modelbuild.go", "\t\t\t\treturn nil, fmt.Errorf(\"inheritance cycle through type %s: %s\", t, strings.Join(append(chain, t), \" -> \"))", "\t\t\t\tbreak")],
+ "M144-type-inheritance-cycle-tolerated": [("modelbuild.go", "\t\t\t\treturn fmt.Errorf(\"inheritance cycle through type %s: %s\", t, strings.Join(append(chain, t), \" -> \"))", "\t\t\t\tbreak")],
  "M145-path-outside-its-type-tolerated": [("modelbuild.go", "\t\tif top != typeName {", "\t\tif _ = top; false {")],
  "M146-repeated-path-tolerated": [("modelbuild.go", "\t\tif seen[e.Path] {", "\t\tif false {")],
  "M147-unresolved-base-definition-tolerated": [("modelbuild.go", "\t\t\t\treturn nil, fmt.Errorf(\"%s: type %s: base definition %s does not resolve: %w\", d.cand.pkgID, name, d.doc.BaseDefinition, err)", "\t\t\t\tcontinue")],
  "M148-content-reference-without-fragment-tolerated": [("modelbuild.go", "\t\t\tif !ok || to == \"\" {", "\t\t\tif false && (!ok || to == \"\") {")],
- "M149-max-not-a-count-tolerated": [("modelbuild.go", "\tif err != nil || n < 0 || n > 1<<30 {", "\tif false {")],
+ "M149-max-not-a-count-tolerated": [("modelbuild.go", "\tif err != nil || n64 < 0 || n64 > 1<<30 {", "\tif false {")],
  "M150-min-out-of-range-tolerated": [("modelbuild.go", "\tif *e.Min < 0 || *e.Min > 1<<30 {", "\tif false {")],
  "M151-types-shares-its-slice": [("model.go", "return append([]string(nil), m.names...)", "return m.names")],
  "M152-unresolved-target-profile-tolerated": [("modelbuild.go", "\tcd, err := b.c.pick(nil, typeStructureDefinition, cn)\n\tif err != nil {\n\t\treturn \"\", err\n\t}\n\tsd := b.docs[cd].sd", "\tcd, err := b.c.pick(nil, typeStructureDefinition, cn)\n\tif err != nil {\n\t\treturn \"\", nil\n\t}\n\tsd := b.docs[cd].sd")],
@@ -267,13 +269,13 @@ muts = {
  # además el oráculo de paridad con models (TestNormalizerParity).
  "M198-is-primitive-never": [("modelbuild.go", "primitive: d.doc.Kind == kindPrimitive}", "primitive: false}")],
  "M199-is-primitive-any-non-logical": [("modelbuild.go", "primitive: d.doc.Kind == kindPrimitive}", "primitive: d.doc.Kind != kindLogical}")],
- "M200-lone-low-surrogate-accepted": [("normscan.go", "\t\t\t\tcase r >= 0xDC00 && r <= 0xDFFF:", "\t\t\t\tcase false:")],
- "M201-lone-high-surrogate-accepted": [("normscan.go", "\t\t\t\t\ts.fail(KindSyntax, p-6, \"high surrogate without its low surrogate\")\n\t\t\t\t\treturn\n", "\t\t\t\t\tcontinue\n")],
+ "M200-lone-low-surrogate-accepted": [("normscan.go", "\t\tcase r >= 0xDC00 && r <= 0xDFFF:", "\t\tcase false:")],
+ "M201-lone-high-surrogate-accepted": [("normscan.go", "\t\t\ts.fail(KindSyntax, p-6, \"high surrogate without its low surrogate\")\n\t\t\treturn 0, false\n", "\t\t\treturn p, true\n")],
  "M202-invalid-utf8-accepted": [("normscan.go", "if r == utf8.RuneError && w <= 1 {", "if r == utf8.RuneError && w <= 1 && false {")],
  "M203-control-character-accepted": [("normscan.go", "\t\tcase c < 0x20:\n\t\t\ts.fail(KindSyntax, p, \"control character", "\t\tcase false:\n\t\t\ts.fail(KindSyntax, p, \"control character")],
  "M204-leading-zero-accepted": [("normscan.go", "\tcase p < len(d) && d[p] == '0':\n\t\tp++\n", "\tcase p < len(d) && d[p] == '0':\n\t\tfor p < len(d) && d[p] >= '0' && d[p] <= '9' {\n\t\t\tp++\n\t\t}\n")],
  "M205-trailing-data-accepted": [("normscan.go", "\tif s.pos != len(s.data) {", "\tif false {")],
- "M206-exponent-without-digits-accepted": [("normscan.go", "\t\tif p == q {\n\t\t\ts.fail(KindSyntax, start, \"invalid number: no digits in the exponent\")", "\t\tif p == q && false {\n\t\t\ts.fail(KindSyntax, start, \"invalid number: no digits in the exponent\")")],
+ "M206-exponent-without-digits-accepted": [("normscan.go", "\t\tif p == q {\n\t\t\treturn p, \"invalid number: no digits in the exponent\"", "\t\tif p == q && false {\n\t\t\treturn p, \"invalid number: no digits in the exponent\"")],
  "M207-object-depth-off-by-one": [("normscan.go", "\tif depth > s.maxDepth {\n\t\treturn s.fail(KindTooDeep, start, \"nesting is deeper than %d\", s.maxDepth)\n\t}\n\ts.pos++\n\tn := s.newNode(kObject, start)", "\tif depth >= s.maxDepth {\n\t\treturn s.fail(KindTooDeep, start, \"nesting is deeper than %d\", s.maxDepth)\n\t}\n\ts.pos++\n\tn := s.newNode(kObject, start)")],
  "M208-array-depth-not-limited": [("normscan.go", "\tif depth > s.maxDepth {\n\t\treturn s.fail(KindTooDeep, start, \"nesting is deeper than %d\", s.maxDepth)\n\t}\n\ts.pos++\n\tn := s.newNode(kArray, start)", "\tif false {\n\t\treturn s.fail(KindTooDeep, start, \"nesting is deeper than %d\", s.maxDepth)\n\t}\n\ts.pos++\n\tn := s.newNode(kArray, start)")],
  "M209-syntax-path-keeps-popped-members": [("normscan.go", "\t\ts.stack = s.stack[:len(s.stack)-1]\n\t\ts.nodes[c].key, s.nodes[c].keyEnd", "\t\ts.nodes[c].key, s.nodes[c].keyEnd")],
@@ -371,11 +373,11 @@ muts = {
  "P-06-nested-backbone-typed-like-models": [("modelbuild.go", "\t\t\tm.pathType[e.Path] = codes[0]\n", "\t\t\tm.pathType[e.Path] = codes[0]\n\t\t\tif codes[0] == \"Element\" {\n\t\t\t\tm.pathType[e.Path] = \"BackboneElement\"\n\t\t\t}\n")],
 
  # Proyección (plan 005, §5.6)
- "PR-01-summary-ignored-below-the-root": [("projection.go", "m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {", "root && m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {")],
- "PR-02-summary-true-skips-min1": [("projection.go", "m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {", "m.IsSummary(path) || m.IsModifier(path) {")],
- "PR-03-summary-true-skips-modifiers": [("projection.go", "m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {", "m.IsSummary(path) || mandatory(m, path) {")],
- "PR-04-elements-skip-min1": [("projection.go", "mandatory(m, path) || m.IsModifier(path) {\n\t\t\treturn actWhole", "m.IsModifier(path) {\n\t\t\treturn actWhole")],
- "PR-05-elements-skip-modifiers": [("projection.go", "mandatory(m, path) || m.IsModifier(path) {\n\t\t\treturn actWhole", "mandatory(m, path) {\n\t\t\treturn actWhole")],
+ "PR-01-summary-ignored-below-the-root": [("projection.go", "if summaryKeeps(m, path) {", "if root && m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {")],
+ "PR-02-summary-true-skips-min1": [("projection.go", "return m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path)\n", "return m.IsSummary(path) || m.IsModifier(path)\n")],
+ "PR-03-summary-true-skips-modifiers": [("projection.go", "return m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path)\n", "return m.IsSummary(path) || mandatory(m, path)\n")],
+ "PR-04-elements-skip-min1": [("projection.go", "\t\tmandatory(m, path) || m.IsModifier(path)\n}", "\t\tm.IsModifier(path)\n}")],
+ "PR-05-elements-skip-modifiers": [("projection.go", "\t\tmandatory(m, path) || m.IsModifier(path)\n}", "\t\tmandatory(m, path)\n}")],
  "PR-06-elements-skip-id-meta": [("projection.go", "p.mode == SummaryFalse && (fs.name == elemID || fs.name == elemMeta) ||", "")],
  "PR-07-text-skips-text": [("projection.go", "(fs.name == elemText || fs.name == elemID || fs.name == elemMeta)", "(fs.name == elemID || fs.name == elemMeta)")],
  "PR-08-extension-not-copied-whole": [("projection.go", "v.kind == vkObject && v.scope == typeExtension {", "v.kind == vkObject && v.scope == typeExtension && false {")],
@@ -391,7 +393,7 @@ muts = {
  "PR-18-unreferenced-contained-kept": [("projection.go", "case !kept[i]:\n\t\t\tfr.lost = true", "case !kept[i] && false:\n\t\t\tfr.lost = true")],
  "PR-19-tag-always": [("projection.go", "if fr.lost {\n\t\tw.addTag(fr)", "if true {\n\t\tw.addTag(fr)")],
  "PR-20-tag-never": [("projection.go", "if fr.lost {\n\t\tw.addTag(fr)", "if false {\n\t\tw.addTag(fr)")],
- "PR-21-tag-duplicated": [("projection.go", "if sys == systemSubsetted && code == codeSubsetted {\n\t\t\t\treturn", "if sys == systemSubsetted && code == codeSubsetted && false {\n\t\t\t\treturn")],
+ "PR-21-tag-duplicated": [("projection.go", "if sys == systemSubsetted && code == codeSubsetted {\n\t\t\treturn true", "if sys == systemSubsetted && code == codeSubsetted && false {\n\t\t\treturn true")],
  "PR-22-tag-only-at-the-root": [("projection.go", "if fr.lost {\n\t\tw.addTag(fr)", "if fr.lost && fr.parent == nil {\n\t\tw.addTag(fr)")],
  "PR-23-tag-replaces-the-others": [("projection.go", "w.out = slices.Insert(w.out, fr.metaStart+int(s.nodes[arr].end)-1, append([]byte{','}, tag...)...)", "w.out = slices.Insert(w.out, fr.metaStart+int(s.nodes[arr].end)-1, append([]byte{}, tag...)...)")],
  "PR-24-modifier-always-false": [("model.go", "func (m *Model) IsModifier(path string) bool { return m.modifier[path] }", "func (m *Model) IsModifier(path string) bool { return false }")],
@@ -466,6 +468,27 @@ def load_cache():
 def save_cache(entries):
     os.makedirs(os.path.dirname(CACHE), exist_ok=True)
     json.dump({"version": CACHE_VERSION, "entries": entries}, open(CACHE, "w"), indent=1, sort_keys=True)
+
+def load_hints():
+    # Los oráculos que detectaron cada mutación la última vez (último reporte y caché):
+    # se corren primero, con -failfast; solo si ninguno falla corre todo.
+    hints = {}
+    ev = os.path.join(R, "docs", "evidence")
+    reports = sorted(f for f in os.listdir(ev) if f.endswith("-mutations.md")) if os.path.isdir(ev) else []
+    for report in reports[-6:]:  # los más recientes pisan a los anteriores
+        for line in open(os.path.join(ev, report)):
+            cols = [c.strip() for c in line.split("|")]
+            if len(cols) > 4 and cols[2].startswith("detected") and cols[3] and cols[3] != "timeout":
+                names = [n for n in cols[3].replace("...", "").split(",") if re.fullmatch(r"\s*Test\w+\s*", n)]
+                if names:
+                    hints[cols[1]] = [n.strip() for n in names]
+    for n, c in load_cache().items():
+        by = [x for x in c["result"].get("by", []) if re.fullmatch(r"Test\w+", x)]
+        if by:
+            hints[n] = by
+    return hints
+
+HINTS = {}
 
 PARITY_RUN = "TestProjectionParity|TestComparisonRejects"
 
@@ -553,7 +576,7 @@ def run_mutation(name, pairs, tmp_root):
             open(p, "w").write(s.replace(old, new))
         pk = os.path.join(R, ".cache", "packages")
         env = dict(os.environ, FHIRPKG_PACKAGES=pk, EXAMPLES_PACKAGES=pk)
-        cmd, cwd = ["go", "test", "-failfast", "-count=1", "./..."], dst
+        cmd, cwd = ["go", "test", "-vet=off", "-failfast", "-count=1", "./..."], dst
         if name.startswith("P-"):
             # Solo los oráculos de parity/ (otro módulo, con replace a ../../go-searchindex).
             os.symlink(os.path.join(os.path.dirname(R), "go-searchindex"), os.path.join(work, "go-searchindex"))
@@ -562,6 +585,16 @@ def run_mutation(name, pairs, tmp_root):
         if name.startswith("O-"):
             return run_oracle_mutation(name, dst, work, env, pk)
         start = time.time()
+        hint = HINTS.get(name)
+        if hint and cmd[:4] == ["go", "test", "-vet=off", "-failfast"]:
+            try:
+                hout = subprocess.run(["go", "test", "-vet=off", "-failfast", "-count=1", "-run", "^(" + "|".join(hint) + ")$", "./..."],
+                                      cwd=cwd, env=env, capture_output=True, text=True, timeout=900).stdout
+            except subprocess.TimeoutExpired:
+                hout = ""
+            hby = sorted(set(re.findall(r"^--- FAIL: (\S+)", hout, re.M)))
+            if hby and not name.startswith("PR-"):
+                return {"status": "detected", "by": hby, "secs": round(time.time() - start, 1)}
         try:
             out = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=900).stdout
         except subprocess.TimeoutExpired:
@@ -596,6 +629,7 @@ def main():
         print("harness self-check: ok")
         return
     prefixes = sys.argv[1:]
+    HINTS.update(load_hints())
     names = [n for n in muts if not prefixes or any(n.startswith(p) for p in prefixes)]
     if not names:
         sys.exit("no mutation matches")

@@ -296,7 +296,12 @@ func checkNormalizeInvariants(t testing.TB, c *Context, in []byte) {
 	if err != nil || !bytes.Equal(again, out) {
 		t.Fatalf("not idempotent: %q -> %q (%v)", out, again, err)
 	}
-	if !slices.Equal(leaves(t, in), leaves(t, out)) {
+	// El relleno de nulls del arreglo más corto (json.html R5 §2.1.6.4.2) agrega
+	// hojas null y nada más: se comparan las hojas con valor.
+	notNull := func(l []string) []string {
+		return slices.DeleteFunc(slices.Clone(l), func(x string) bool { return x == "null" })
+	}
+	if !slices.Equal(notNull(leaves(t, in)), notNull(leaves(t, out))) {
 		t.Fatalf("different leaves:\n in %q\nout %q", leaves(t, in), leaves(t, out))
 	}
 }

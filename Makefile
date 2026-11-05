@@ -16,7 +16,7 @@ vet:
 # con -race (es inmutable y se usa desde varias goroutines).
 test:
 	go test ./...
-	go test -race -count=1 -run 'TestContextIsConcurrent|TestModelIsConcurrent|TestNormalizeIsConcurrent' .
+	go test -race -count=1 -run 'TestContextIsConcurrent|TestModelIsConcurrent|TestNormalizeIsConcurrent|TestProjectIsConcurrent' .
 
 # Descarga los packages oficiales (SHA-256 fijado en scripts/packages.sha256) a
 # .cache/packages y corre los tests que los usan: los locks de testdata, el
@@ -33,6 +33,7 @@ check-packages: fetch
 	@if [ ! -d ../go-searchindex/definitions/data ] && [ -z "$(ALLOW_NO_SEARCHINDEX)" ]; then \
 		echo "check-packages: ../go-searchindex/definitions/data is missing, so the searchindex comparison would be skipped (ALLOW_NO_SEARCHINDEX=1 to allow)"; exit 1; fi
 	FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages go test -count=1 -v -run 'TestReal|TestNormalize' .
+	python3 -I scripts/projection_oracle.py --self-test --packages $(CURDIR)/.cache/packages
 	$(MAKE) parity
 
 # Paridad del modelo de tipos (plan 003) y del normalizador (plan 004), en el módulo
@@ -57,7 +58,7 @@ parity: fetch
 	cd parity && FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages EXAMPLES_PACKAGES=$(CURDIR)/.cache/packages \
 		SYNTHEA_ZIP=$(CURDIR)/.cache/synthea/synthea_sample_data_fhir_r4_nov2021.zip GEN_CORPUS=$(CURDIR)/.cache/generated \
 		PARITY_REPORT=$(CURDIR)/docs/evidence/$$(date +%Y-%m-%d)-parity.md PARITY_ISSUE=$(CURDIR)/docs/issues/models-fhirpath-model-gaps.md \
-		go test -count=1 -v ./...
+		go test -count=1 -timeout 20m -v ./...
 
 # Dorado de Conflicts() por versión (testdata/golden, plan 002): lo reescribe con
 # los packages oficiales. Revisar siempre el diff.
@@ -76,6 +77,7 @@ fuzz:
 	go test -run '^$$' -fuzz '^FuzzModelFromStructureDefinition$$' -fuzztime $(FUZZTIME) .
 	go test -run '^$$' -fuzz '^FuzzNormalize$$' -fuzztime $(FUZZTIME) .
 	go test -run '^$$' -fuzz '^FuzzScanner$$' -fuzztime $(FUZZTIME) .
+	go test -run '^$$' -fuzz '^FuzzProject$$' -fuzztime $(FUZZTIME) .
 
 # Reporte del grafo (plan 001, pieza F): para cada raíz candidata de
 # scripts/graph-candidates.txt, el grafo, los núcleos ajenos, las versiones
@@ -118,3 +120,39 @@ validator-types:
 	scripts/fetch-packages.sh >/dev/null
 	scripts/fetch-hl7.sh >/dev/null
 	python3 -I scripts/validator_types.py
+
+# Validez de la proyección (plan 005 §5.3). Con Java: escribe la muestra
+# determinista (TestWriteProjectionSample: la entrada y su proyección en cada modo)
+# y la juzga con validator_cli (a lo sumo 2 JVM; veredictos en caché por SHA-256).
+# Los veredictos quedan en testdata/projection-hl7/, y make check-packages
+# los verifica sin Java (TestProjectionHL7Verdicts).
+.PHONY: hl7-projection
+hl7-projection:
+	scripts/fetch-packages.sh >/dev/null
+	scripts/fetch-packages.sh $(CURDIR)/scripts/examples.sha256 >/dev/null
+	scripts/fetch-hl7.sh >/dev/null
+	rm -rf .cache/projection-sample
+	cd parity && FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages EXAMPLES_PACKAGES=$(CURDIR)/.cache/packages \
+		PROJECTION_SAMPLE_OUT=$(CURDIR)/.cache/projection-sample go test -count=1 -run '^TestWriteProjectionSample$$' .
+	python3 -I scripts/validator_projection.py $(CURDIR)/.cache/projection-sample
+
+# Oráculo HAPI (plan 005, D7), no bloqueante y fuera de make check: HAPI 8.10.0
+# (hapi-fhir-structures de Maven Central, SHA-256 en scripts/hapi.sha256) proyecta los
+# ejemplos oficiales con su parser y TestHAPIParity compara qué elementos conserva
+# cada uno; las cuentas por clase están en parity/testdata/hapi-projection.json
+# (PARITY_UPDATE=1 las reescribe). Necesita Java; una JVM por versión, de a una.
+.PHONY: hapi-projection
+hapi-projection:
+	scripts/fetch-packages.sh >/dev/null
+	scripts/fetch-packages.sh $(CURDIR)/scripts/examples.sha256 >/dev/null
+	scripts/fetch-hapi.sh
+	rm -rf .cache/hapi-out
+	cd parity && FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages EXAMPLES_PACKAGES=$(CURDIR)/.cache/packages \
+		HAPI_OUT=$(CURDIR)/.cache/hapi-out go test -count=1 -run '^TestWriteHAPIJobs$$' .
+	for v in R4 R4B R5; do \
+		l=$$(echo $$v | tr 'A-Z' 'a-z'); cp=.cache/hapi/hapi-fhir-structures-$$l-8.10.0.jar:.cache/hl7/validator_cli.jar; \
+		mkdir -p .cache/hapi-out/classes/$$v && javac -cp $$cp -d .cache/hapi-out/classes/$$v scripts/hapi/Projection.java && \
+		java -Xmx2g -cp .cache/hapi-out/classes/$$v:$$cp Projection $$v .cache/hapi-out/$$v/jobs.tsv || exit 1; \
+	done
+	cd parity && FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages EXAMPLES_PACKAGES=$(CURDIR)/.cache/packages \
+		HAPI_OUT=$(CURDIR)/.cache/hapi-out go test -count=1 -run '^TestHAPIParity$$' .

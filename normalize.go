@@ -59,8 +59,6 @@ const (
 	KindNotPrimitive
 	// KindMultipleChoice: dos variantes del mismo elemento con varios tipos.
 	KindMultipleChoice
-	// KindLengthMismatch: los arreglos `x` y `_x` tienen distinto largo.
-	KindLengthMismatch
 	// KindWrongShape: objeto donde va arreglo o escalar, arreglo donde va un
 	// valor, escalar donde va objeto.
 	KindWrongShape
@@ -70,6 +68,18 @@ const (
 	KindEmptyString
 	// KindNull: null fuera de la alineación de los arreglos `x` y `_x`.
 	KindNull
+	// KindUnknownElement: (NewProjection, plan 005) el nombre de _elements no es
+	// un elemento de la raíz del tipo.
+	KindUnknownElement
+	// KindChoiceElement: (NewProjection) el nombre de _elements es `value[x]` o una
+	// variante (`valueQuantity`): search.html pide nombres de elemento base. El
+	// núcleo puede ignorar este error (search.html permite ignorar el nombre).
+	KindChoiceElement
+	// KindConflictingModes: (NewProjection) _summary y _elements a la vez (D5).
+	KindConflictingModes
+	// KindProjectionMismatch: (Project) la Projection viene de otro Context o su
+	// tipo no es el resourceType de la entrada, o el modo no existe.
+	KindProjectionMismatch
 )
 
 var kindNames = [...]string{
@@ -82,11 +92,14 @@ var kindNames = [...]string{
 	KindDuplicateProperty:   "duplicate-property",
 	KindNotPrimitive:        "not-primitive",
 	KindMultipleChoice:      "multiple-choice",
-	KindLengthMismatch:      "length-mismatch",
 	KindWrongShape:          "wrong-shape",
 	KindEmpty:               "empty",
 	KindEmptyString:         "empty-string",
 	KindNull:                "null",
+	KindUnknownElement:      "unknown-element",
+	KindChoiceElement:       "choice-element",
+	KindConflictingModes:    "conflicting-modes",
+	KindProjectionMismatch:  "projection-mismatch",
 }
 
 func (k ErrorKind) String() string {
@@ -185,13 +198,22 @@ func WithMaxErrors(n int) NormalizeOption { return func(l *normLimits) { l.errs 
 // con el escape de encoding/json sin escapar HTML (el de gofhir/models) y los
 // números con su texto. Es seguro para uso concurrente.
 func (c *Context) Normalize(data []byte, opts ...NormalizeOption) ([]byte, error) {
+	lim, err := limitsOf(opts)
+	if err != nil {
+		return nil, err
+	}
+	return c.model.normalize(data, lim)
+}
+
+// limitsOf aplica las opciones sobre los límites por defecto.
+func limitsOf(opts []NormalizeOption) (normLimits, error) {
 	lim := normLimits{DefaultMaxDepth, DefaultMaxBytes, DefaultMaxErrors}
 	for _, o := range opts {
 		o(&lim)
 	}
 	if lim.depth < 1 || lim.bytes < 1 || lim.errs < 1 {
-		return nil, errors.New("normalize: the limits must be positive")
+		return lim, errors.New("normalize: the limits must be positive")
 	}
 	lim.bytes = min(lim.bytes, math.MaxUint32-1)
-	return c.model.normalize(data, lim)
+	return lim, nil
 }

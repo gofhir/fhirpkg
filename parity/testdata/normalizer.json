@@ -94,13 +94,6 @@
   "source": "probes",
   "version": "R4B",
   "class": "keeps-invalid",
-  "rule": "length-mismatch (rule 6)",
-  "count": 1
- },
- {
-  "source": "probes",
-  "version": "R4B",
-  "class": "keeps-invalid",
   "rule": "multiple-choice (rule 6)",
   "count": 1
  },
@@ -137,6 +130,13 @@
   "version": "R4B",
   "class": "transforms",
   "rule": "a string is written as a number (5)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4B",
+  "class": "transforms",
+  "rule": "other: changed Patient.name._given",
   "count": 1
  },
  {
@@ -206,13 +206,6 @@
   "source": "probes",
   "version": "R4",
   "class": "keeps-invalid",
-  "rule": "length-mismatch (rule 6)",
-  "count": 1
- },
- {
-  "source": "probes",
-  "version": "R4",
-  "class": "keeps-invalid",
   "rule": "multiple-choice (rule 6)",
   "count": 1
  },
@@ -249,6 +242,13 @@
   "version": "R4",
   "class": "transforms",
   "rule": "a string is written as a number (5)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R4",
+  "class": "transforms",
+  "rule": "other: changed Patient.name._given",
   "count": 1
  },
  {
@@ -318,13 +318,6 @@
   "source": "probes",
   "version": "R5",
   "class": "keeps-invalid",
-  "rule": "length-mismatch (rule 6)",
-  "count": 1
- },
- {
-  "source": "probes",
-  "version": "R5",
-  "class": "keeps-invalid",
   "rule": "multiple-choice (rule 6)",
   "count": 1
  },
@@ -361,6 +354,13 @@
   "version": "R5",
   "class": "transforms",
   "rule": "a string is written as a number (5)",
+  "count": 1
+ },
+ {
+  "source": "probes",
+  "version": "R5",
+  "class": "transforms",
+  "rule": "other: changed Patient.name._given",
   "count": 1
  },
  {

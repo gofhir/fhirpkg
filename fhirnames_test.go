@@ -45,9 +45,12 @@ var formatLiterals = map[string]bool{
 	`"duplicate-property"`:    true, // ErrorKind
 	`"not-primitive"`:         true, // ErrorKind
 	`"multiple-choice"`:       true, // ErrorKind
-	`"length-mismatch"`:       true, // ErrorKind
 	`"wrong-shape"`:           true, // ErrorKind
 	`"empty-string"`:          true, // ErrorKind
+	`"unknown-element"`:       true, // ErrorKind (plan 005)
+	`"choice-element"`:        true, // ErrorKind (plan 005)
+	`"conflicting-modes"`:     true, // ErrorKind (plan 005)
+	`"projection-mismatch"`:   true, // ErrorKind (plan 005)
 	`"null"`:                  true, // ErrorKind y el literal JSON
 	`"true"`:                  true, // literal JSON
 	`"false"`:                 true, // literal JSON

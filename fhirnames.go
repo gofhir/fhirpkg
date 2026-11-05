@@ -113,6 +113,10 @@ var jsonFieldSources = map[string]string{
 	"dependencies":           "packages.html: package.json dependencies",
 	"fhirVersions":           "packages.html: package.json fhirVersions",
 	"fhir-version-list":      "packages.html: package.json fhir-version-list (campo legado del núcleo R4)",
+	"isSummary":              "elementdefinition.html: ElementDefinition.isSummary",
+	"isModifier":             "elementdefinition.html: ElementDefinition.isModifier",
+	"concept":                "codesystem.html: CodeSystem.concept (anidado)",
+	"display":                "codesystem.html: CodeSystem.concept.display; datatypes.html: Coding.display",
 }
 
 // Vocabulario del formato JSON de FHIR (plan 004 §7).
@@ -126,4 +130,50 @@ const (
 	// rootFallback: resource.html: todo recurso es un Resource. Nombra la raíz de
 	// la ruta de un error de sintaxis cuando el resourceType no se alcanzó a leer.
 	rootFallback = "Resource"
+)
+
+// Vocabulario de la proyección _summary / _elements (plan 005, ADR-005). Ningún
+// dato de los packages marca estos nombres: salen de la prosa de search.html
+// (R4 y R4B §3.1.1.5.8; R5 §3.2.1.7.5), y cada uno tiene su test en
+// projection_names_test.go que lo comprueba contra los tres núcleos.
+const (
+	// elemText: el modo `text` conserva «the text element» y el modo `data` lo
+	// quita (search.html, _summary). Es DomainResource.text, de tipo Narrative.
+	elemText = "text"
+	// elemID y elemMeta: el modo `text` conserva «the 'id' element, the 'meta'
+	// element» (search.html). `_elements` los suma por decisión D4 del plan 005
+	// (no es texto de HL7): meta lleva el tag SUBSETTED. Vienen de Resource.
+	elemID   = "id"
+	elemMeta = "meta"
+	// elemContained: DomainResource.contained (domainresource.html); su recurso
+	// referido se conserva (D9).
+	elemContained = "contained"
+	// elemTag: Meta.tag (resource.html), donde va el tag SUBSETTED; sus campos
+	// son Coding.system, .code y .display (datatypes.html).
+	elemTag     = "tag"
+	elemSystem  = "system"
+	elemCode    = "code"
+	elemDisplay = "display"
+	// elemReference: Reference.reference (references.html); la referencia local
+	// de un contenido empieza con localRefPrefix («#id», references.html,
+	// «contained resources»).
+	elemReference  = "reference"
+	localRefPrefix = "#"
+	// typeExtension: el tipo de Element.extension y DomainResource.modifierExtension
+	// (extensibility.html); una Extension conservada se copia entera (D1) porque
+	// Extension.url tiene min 1 y no está en el resumen.
+	typeExtension = "Extension"
+	// typeReference: el tipo de los elementos cuyo .reference nombra un recurso
+	// contenido (references.html).
+	typeReference = "Reference"
+	// typeCanonical: el tipo primitivo `canonical`; un canonical local («#id»,
+	// references.html, fragmentos) también nombra un recurso contenido (D9).
+	typeCanonical = "canonical"
+	// typeCodeSystem: el recurso donde se verifica el concepto SUBSETTED.
+	typeCodeSystem = "CodeSystem"
+	// systemSubsetted y codeSubsetted: search.html («Servers SHOULD mark the
+	// resources with the tag SUBSETTED»); el concepto está en el CodeSystem
+	// v3-ObservationValue de la terminología de HL7.
+	systemSubsetted = "http://terminology.hl7.org/CodeSystem/v3-ObservationValue"
+	codeSubsetted   = "SUBSETTED"
 )

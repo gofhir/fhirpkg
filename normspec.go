@@ -53,6 +53,7 @@ type keyRef struct {
 }
 
 type objSpec struct {
+	scope  string // el alcance con que se armó: el prefijo de los caminos de sus hijos
 	fields []fieldSpec
 	keys   map[string]keyRef
 }
@@ -116,7 +117,7 @@ func (m *Model) extSpec(prim string) *objSpec {
 }
 
 func (m *Model) buildSpec(scope string, skip func(string) bool) *objSpec {
-	sp := &objSpec{keys: map[string]keyRef{}}
+	sp := &objSpec{scope: scope, keys: map[string]keyRef{}}
 	for _, cn := range m.ChildElements(scope) {
 		if skip != nil && skip(cn) {
 			continue

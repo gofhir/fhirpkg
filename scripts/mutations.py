@@ -243,7 +243,7 @@ muts = {
  "M175-variant-targets-truncated": [("modelbuild.go", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tm.refs[variant] = rs\n\t\t\t\t}", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tm.refs[variant] = rs[:1]\n\t\t\t\t}")],
  "M176-element-targets-truncated": [("modelbuild.go", "\t\t\tm.refs[e.Path] = rs\n", "\t\t\tm.refs[e.Path] = rs[:1]\n")],
  "M177-fhir-type-of-abstract-types-dropped": [("modelbuild.go", "func (b *modelBuilder) addFHIRType(d *typeDef, e elementDoc, path string) {\n", "func (b *modelBuilder) addFHIRType(d *typeDef, e elementDoc, path string) {\n\tif d.doc.Abstract {\n\t\treturn\n\t}\n")],
- "M178-abstract-type-cardinality-dropped": [("modelbuild.go", "\t\t\tm.card[path] = cardinality{lo, hi}\n\t\t\treturn nil", "\t\t\tif !d.doc.Abstract {\n\t\t\t\tm.card[path] = cardinality{lo, hi}\n\t\t\t}\n\t\t\treturn nil")],
+ "M178-abstract-type-cardinality-dropped": [("modelbuild.go", "\t\t\tm.card[path] = cardinality{lo, hi}\n\t\t\tif e.IsSummary {", "\t\t\tif !d.doc.Abstract {\n\t\t\t\tm.card[path] = cardinality{lo, hi}\n\t\t\t}\n\t\t\tif e.IsSummary {")],
  "M179-element-without-id-tolerated": [("modelbuild.go", "\t\tif e.ID == \"\" {", "\t\tif false {")],
  "M180-slice-mark-in-path-tolerated": [("modelbuild.go", "\t\tif strings.Contains(e.Path, \":\") {", "\t\tif false {")],
  "M181-content-reference-with-type-tolerated": [("modelbuild.go", "\t\t\tif len(e.Type) > 0 {\n\t\t\t\treturn fmt.Errorf(\"%s: %q: the element has a content reference", "\t\t\tif false {\n\t\t\t\treturn fmt.Errorf(\"%s: %q: the element has a content reference")],
@@ -289,20 +289,23 @@ muts = {
  "M219-members-in-input-order": [("normwalk.go", "\t\tcase a.sk != b.sk:", "\t\tcase false:")],
  "M220-members-in-reverse-order": [("normwalk.go", "\t\t\tif a.sk < b.sk {\n\t\t\t\treturn -1\n\t\t\t}\n\t\t\treturn 1", "\t\t\tif a.sk > b.sk {\n\t\t\t\treturn -1\n\t\t\t}\n\t\t\treturn 1")],
  "M221-unknown-properties-in-input-order": [("normwalk.go", "string(w.keyBytes(b.n))); c != 0 {", "string(w.keyBytes(b.n))); false && c != 0 {")],
- "M222-underscore-without-prefix": [("normwalk.go", "\t\t\tw.writeKey(primitiveExtPrefix, v.key)\n\t\t\tw.objectValue(um, ext)", "\t\t\tw.writeKey(\"\", v.key)\n\t\t\tw.objectValue(um, ext)")],
+ "M222-underscore-without-prefix": [("normwalk.go", "\t\t\tw.writeKey(primitiveExtPrefix, v.key)\n\t\t\tif w.objectValue(um, ext) {", "\t\t\tw.writeKey(\"\", v.key)\n\t\t\tif w.objectValue(um, ext) {")],
  "M223-choice-conflict-tolerated": [("normwalk.go", "\t\tif x.ref.variant != g[0].ref.variant {", "\t\tif false {")],
  "M224-duplicate-property-tolerated": [("normwalk.go", "\t\tif *slot != 0 {", "\t\tif false {")],
  "M225-underscore-on-non-primitive-tolerated": [("normwalk.go", "\tif um != 0 && v.kind != vkPrimitive {", "\tif false {")],
  "M226-unknown-property-tolerated": [("normwalk.go", "\t\t\tw.report(KindUnknownProperty, ms[i].n, string(appendPropertyPath(nil, string(w.keyBytes(ms[i].n)))), \"the type has no such element\")", "\t\t\t_ = ms")],
- "M227-length-mismatch-tolerated": [("normwalk.go", "w.count(xm) != w.count(um)", "false")],
+ "M227-underscore-padding-omitted": [("normwalk.go", "\t\t\tfor ; c != 0; c = w.nodes[c].next {\n\t\t\t\tw.out = append(w.out, \",null\"...) // el error", "\t\t\tfor ; c != 0 && false; c = w.nodes[c].next {\n\t\t\t\tw.out = append(w.out, \",null\"...) // el error")],
+ "M227d-suffix-null-reported-before-underscore-errors": [("normwalk.go", "\t\t\tfor ; c != 0; c = w.nodes[c].next {\n\t\t\t\tw.out = append(w.out, \",null\"...)", "\t\t\tfor ; c != 0; c = w.nodes[c].next {\n\t\t\t\tif w.nodes[c].kind == kNull {\n\t\t\t\t\tw.report(KindNull, c, \"\", \"x\")\n\t\t\t\t}\n\t\t\t\tw.out = append(w.out, \",null\"...)")],
+ "M227b-value-padding-omitted": [("normwalk.go", "\t\t\tfor i := nu; i < nx && !w.trunc; i++ {", "\t\t\tfor i := nu; i < 0 && !w.trunc; i++ {")],
+ "M227c-filtered-suffix-not-null": [("normwalk.go", "\t\tps[i].null = true // el sufijo inferido del valor más corto", "\t\t_ = i // el sufijo inferido del valor más corto")],
  "M228-array-not-required-for-repeating": [("normwalk.go", "\tif nd.kind != kArray {\n\t\tw.report(KindWrongShape, n, \"\", \"the element repeats: an array is expected\")", "\tif false {\n\t\tw.report(KindWrongShape, n, \"\", \"the element repeats: an array is expected\")")],
  "M229-empty-array-tolerated": [("normwalk.go", "\tif nd.first == 0 {\n\t\tw.report(KindEmpty, n, \"\", \"an empty array is not allowed\")", "\tif false {\n\t\tw.report(KindEmpty, n, \"\", \"an empty array is not allowed\")")],
  "M230-empty-object-tolerated": [("normwalk.go", "\tcase nd.first == 0:\n\t\tw.report(KindEmpty, n, \"\", \"an empty object is not allowed\")", "\tcase false:\n\t\tw.report(KindEmpty, n, \"\", \"an empty object is not allowed\")")],
  "M231-null-object-is-a-shape-error": [("normwalk.go", "\tcase nd.kind == kNull:\n\t\tw.report(KindNull, n, \"\", \"null is not allowed here\")\n\tcase nd.kind != kObject:", "\tcase false:\n\t\tw.report(KindNull, n, \"\", \"null is not allowed here\")\n\tcase nd.kind != kObject:")],
- "M232-null-without-underscore-partner-tolerated": [("normwalk.go", "\t\t\t\tif p == 0 || w.nodes[p].kind == kNull {", "\t\t\t\tif false {")],
- "M233-null-without-value-partner-tolerated": [("normwalk.go", "\t\t\t\tif xm == 0 {\n\t\t\t\t\tw.report(KindNull, c, \"\", \"null needs a value in the value array", "\t\t\t\tif false {\n\t\t\t\t\tw.report(KindNull, c, \"\", \"null needs a value in the value array")],
- "M234-root-path-missing": [("normwalk.go", "\tif len(w.path) == 0 {\n\t\tw.push(rt)\n\t\tdefer w.pop()\n\t}", "\t_ = rt")],
- "M235-array-index-not-in-the-path": [("normwalk.go", "\t\tw.setIdx(i)\n\t\tw.element(v, c)", "\t\t_ = i\n\t\tw.element(v, c)")],
+ "M232-null-without-underscore-partner-tolerated": [("normwalk.go", "\t\t\t}\n\t\t\tw.setIdx(i)\n\t\t\tif w.nodes[c].kind == kNull {\n\t\t\t\tif p == 0 || w.nodes[p].kind == kNull {", "\t\t\t}\n\t\t\tw.setIdx(i)\n\t\t\tif w.nodes[c].kind == kNull {\n\t\t\t\tif false {")],
+ "M233-null-without-value-partner-tolerated": [("normwalk.go", "\t\t\t\tif xm == 0 || i >= nx {\n\t\t\t\t\tw.report(KindNull, c, \"\", \"null needs a value in the value array at the same position\")\n\t\t\t\t} else {", "\t\t\t\tif false {\n\t\t\t\t\tw.report(KindNull, c, \"\", \"null needs a value in the value array at the same position\")\n\t\t\t\t} else {")],
+ "M234-root-path-missing": [("normwalk.go", "\t\tw.push(rt)\n\t\tdefer w.pop()\n\t}", "\t\t_ = rt\n\t}")],
+ "M235-array-index-not-in-the-path": [("normwalk.go", "\t\tw.setIdx(i)\n\t\tif w.occurrence(v, c, mand) {", "\t\t_ = i\n\t\tif w.occurrence(v, c, mand) {")],
  "M236-any-type-is-a-resource": [("normwalk.go", "!w.m.IsResource(rt) || (slot != \"\" && !w.m.IsSubtype(rt, slot))", "false")],
  "M237-slot-type-not-checked": [("normwalk.go", "(slot != \"\" && !w.m.IsSubtype(rt, slot))", "false")],
  "M238-missing-resource-type-tolerated": [("normwalk.go", "\tcase count == 0:\n\t\tw.report(KindMissingResourceType", "\tcase false:\n\t\tw.report(KindMissingResourceType")],
@@ -354,7 +357,7 @@ muts = {
  "P-09-strings-copied-without-rewriting": [("normwalk.go", "\t\tif !nd.dirt {", "\t\tif true {")],
  "P-10-unknown-property-tolerated": [("normwalk.go", "\t\t\tw.report(KindUnknownProperty, ms[i].n, string(appendPropertyPath(nil, string(w.keyBytes(ms[i].n)))), \"the type has no such element\")", "\t\t\t_ = ms")],
  "P-11-numbers-truncated": [("normwalk.go", "\tcase kNumber, kTrue, kFalse:\n\t\tw.out = append(w.out, w.data[nd.start:nd.end]...)", "\tcase kNumber, kTrue, kFalse:\n\t\tw.out = append(w.out, w.data[nd.start:min(nd.end, nd.start+15)]...)")],
- "P-12-underscore-without-prefix": [("normwalk.go", "\t\t\tw.writeKey(primitiveExtPrefix, v.key)\n\t\t\tw.objectValue(um, ext)", "\t\t\tw.writeKey(\"\", v.key)\n\t\t\tw.objectValue(um, ext)")],
+ "P-12-underscore-without-prefix": [("normwalk.go", "\t\t\tw.writeKey(primitiveExtPrefix, v.key)\n\t\t\tif w.objectValue(um, ext) {", "\t\t\tw.writeKey(\"\", v.key)\n\t\t\tif w.objectValue(um, ext) {")],
  "P-13-oracle-covers-only-ancestors": [("parity/normparity_test.go", "if e.Path == \"\" || d.Elem == e.Path || strings.HasPrefix(d.Elem, e.Path+\".\")", "if e.Path == \"\" || strings.HasPrefix(d.Elem, e.Path+\".\")")],
  "P-14-oracle-calls-every-accepted-resource-unchanged": [("parity/normparity_test.go", "\tcase err == nil && bytes.Equal(out, mr.out):", "\tcase err == nil:")],
  "P-15-oracle-ignores-models-failures": [("parity/normparity_test.go", "\tcase mr.err != nil:\n\t\trule := \"normalize accepts\"", "\tcase false:\n\t\trule := \"normalize accepts\"")],
@@ -366,6 +369,73 @@ muts = {
  "P-04-abstract-type-elements-dropped": [("modelbuild.go", "\t\tparent, name := e.Path[:i], e.Path[i+1:]\n", "\t\tparent, name := e.Path[:i], e.Path[i+1:]\n\t\tif d.doc.Abstract {\n\t\t\tcontinue\n\t\t}\n")],
  "P-05-choice-variants-lose-their-targets": [("modelbuild.go", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tm.refs[variant] = rs\n\t\t\t\t}", "\t\t\t\t_ = rs")],
  "P-06-nested-backbone-typed-like-models": [("modelbuild.go", "\t\t\tm.pathType[e.Path] = codes[0]\n", "\t\t\tm.pathType[e.Path] = codes[0]\n\t\t\tif codes[0] == \"Element\" {\n\t\t\t\tm.pathType[e.Path] = \"BackboneElement\"\n\t\t\t}\n")],
+
+ # Proyección (plan 005, §5.6)
+ "PR-01-summary-ignored-below-the-root": [("projection.go", "m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {", "root && m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {")],
+ "PR-02-summary-true-skips-min1": [("projection.go", "m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {", "m.IsSummary(path) || m.IsModifier(path) {")],
+ "PR-03-summary-true-skips-modifiers": [("projection.go", "m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {", "m.IsSummary(path) || mandatory(m, path) {")],
+ "PR-04-elements-skip-min1": [("projection.go", "mandatory(m, path) || m.IsModifier(path) {\n\t\t\treturn actWhole", "m.IsModifier(path) {\n\t\t\treturn actWhole")],
+ "PR-05-elements-skip-modifiers": [("projection.go", "mandatory(m, path) || m.IsModifier(path) {\n\t\t\treturn actWhole", "mandatory(m, path) {\n\t\t\treturn actWhole")],
+ "PR-06-elements-skip-id-meta": [("projection.go", "p.mode == SummaryFalse && (fs.name == elemID || fs.name == elemMeta) ||", "")],
+ "PR-07-text-skips-text": [("projection.go", "(fs.name == elemText || fs.name == elemID || fs.name == elemMeta)", "(fs.name == elemID || fs.name == elemMeta)")],
+ "PR-08-extension-not-copied-whole": [("projection.go", "v.kind == vkObject && v.scope == typeExtension {", "v.kind == vkObject && v.scope == typeExtension && false {")],
+ "PR-09-data-keeps-text-of-contained": [("projection.go", "if resLevel && fs.name == elemText {", "if resLevel && root && fs.name == elemText {")],
+ "PR-10-data-drops-text-below-the-resource": [("projection.go", "if resLevel && fs.name == elemText {", "if fs.name == elemText {")],
+ "PR-11-underscore-array-not-filtered": [("normwalk.go", "um != 0 && w.p.filtersUnderscore() {", "um != 0 && w.p.filtersUnderscore() && false {")],
+ "PR-12-underscore-array-dropped": [("normwalk.go", "\tif keptExt > 0 {", "\tif false {")],
+ "PR-13-null-position-kept": [("normwalk.go", "if p.null && p.ext == nil {", "if false {")],
+ "PR-14-empty-container-kept": [("normwalk.go", "if w.object(n, sp, \"\") > 0 {", "if w.object(n, sp, \"\") >= 0 {")],
+ "PR-15-dropped-element-not-counted-as-loss": [("projection.go", "\tw.out, *first = w.out[:mark], wasFirst\n\tw.loss()\n\treturn false\n}", "\tw.out, *first = w.out[:mark], wasFirst\n\treturn false\n}")],
+ "PR-16-referenced-contained-dropped": [("projection.go", "\t\t\tkept[i] = true\n\t\t\tfor r := range fr.cl[i].refs {", "\t\t\tkept[i] = false\n\t\t\tfor r := range fr.cl[i].refs {")],
+ "PR-17-contained-not-transitive": [("projection.go", "for r := range fr.cl[i].refs {", "for r := range map[string]bool{} {")],
+ "PR-18-unreferenced-contained-kept": [("projection.go", "case !kept[i]:\n\t\t\tfr.lost = true", "case !kept[i] && false:\n\t\t\tfr.lost = true")],
+ "PR-19-tag-always": [("projection.go", "if fr.lost {\n\t\tw.addTag(fr)", "if true {\n\t\tw.addTag(fr)")],
+ "PR-20-tag-never": [("projection.go", "if fr.lost {\n\t\tw.addTag(fr)", "if false {\n\t\tw.addTag(fr)")],
+ "PR-21-tag-duplicated": [("projection.go", "if sys == systemSubsetted && code == codeSubsetted {\n\t\t\t\treturn", "if sys == systemSubsetted && code == codeSubsetted && false {\n\t\t\t\treturn")],
+ "PR-22-tag-only-at-the-root": [("projection.go", "if fr.lost {\n\t\tw.addTag(fr)", "if fr.lost && fr.parent == nil {\n\t\tw.addTag(fr)")],
+ "PR-23-tag-replaces-the-others": [("projection.go", "w.out = slices.Insert(w.out, fr.metaStart+int(s.nodes[arr].end)-1, append([]byte{','}, tag...)...)", "w.out = slices.Insert(w.out, fr.metaStart+int(s.nodes[arr].end)-1, append([]byte{}, tag...)...)")],
+ "PR-24-modifier-always-false": [("model.go", "func (m *Model) IsModifier(path string) bool { return m.modifier[path] }", "func (m *Model) IsModifier(path string) bool { return false }")],
+ "PR-25-summary-ignores-choice-variants": [("modelbuild.go", "\t\t\tif e.IsSummary {\n\t\t\t\tm.summary[path] = true", "\t\t\tif e.IsSummary && !strings.Contains(e.Path, \"[x]\") {\n\t\t\t\tm.summary[path] = true")],
+ "PR-28-mandatory-primitive-underscore-filtered": [("normwalk.go", "w.p != nil && w.copy == 0 && mandatory(w.m, sp.scope+\".\"+fs.name) {", "w.p != nil && w.copy == 0 && mandatory(w.m, sp.scope+\".\"+fs.name) && false {")],
+ "PR-36-mandatory-fallback-per-field": [("normwalk.go", "\tif !mand {\n\t\treturn w.element(v, n)", "\tif !mand || w.path[len(w.path)-1].idx >= 0 {\n\t\treturn w.element(v, n)")],
+ "PR-31-emptied-mandatory-removed": [("normwalk.go", "\tif !mand {\n\t\treturn w.element(v, n)", "\tif !mand || true {\n\t\treturn w.element(v, n)")],
+ "PR-32-canonical-local-not-collected": [("normwalk.go", "(sp.scope == typeReference && v.key == elemReference || v.prim == typeCanonical) {", "(sp.scope == typeReference && v.key == elemReference) {")],
+ "PR-33-contained-closure-ignores-nested-refs": [("projection.go", "\t\t\tfor r := range fr.cl[i].refs {\n\t\t\t\tif !fr.refs[r] {", "\t\t\tfor r := range fr.cl[i].refs {\n\t\t\t\tif !fr.refs[r] && false {")],
+ "PR-35-null-underscore-kept": [("normwalk.go", "um != 0 && w.p.filtersUnderscore() {", "um != 0 && w.p.filtersUnderscore() && !(w.nodes[um].kind == kArray && w.nodes[w.nodes[um].first].kind == kNull) {")],
+ 'O-R1-data-keeps-text': [('scripts/projection_oracle.py', '            if root and k == N_TEXT:\n                lost = True', '            if False and root and k == N_TEXT:\n                lost = True')],
+ "PR-37-walker-rewrites-one-number-lexeme": [("normwalk.go", "\tcase kNumber, kTrue, kFalse:\n\t\tw.out = append(w.out, w.data[nd.start:nd.end]...)", "\tcase kNumber, kTrue, kFalse:\n\t\tif string(w.data[nd.start:nd.end]) == \"1.50\" {\n\t\t\tw.out = append(w.out, \"1.5\"...)\n\t\t} else {\n\t\t\tw.out = append(w.out, w.data[nd.start:nd.end]...)\n\t\t}")],
+ 'O-R10-structuredefinition-last-wins': [('scripts/projection_oracle.py', 'win = cascade(cands, core_series, "StructureDefinition " + url).res', 'win = cands[-1].res')],
+ 'O-R10-structuredefinition-first-wins': [('scripts/projection_oracle.py', 'win = cascade(cands, core_series, "StructureDefinition " + url).res', 'win = cands[0].res')],
+ 'O-R10-structuredefinition-filename-filter': [('scripts/projection_oracle.py', '                        elif _root_json(mem):\n                            raw = tf.extractfile(mem).read()\n                            if not _may_be_sd(raw):', '                        elif _root_json(mem) and mem.name.startswith("package/StructureDefinition-"):\n                            raw = tf.extractfile(mem).read()\n                            if not _may_be_sd(raw):')],
+ 'O-R1-false-filters': [('scripts/projection_oracle.py', '        if eff == "false":\n            return resource_obj', '        if eff == "false":\n            eff, names = "elements", set()')],
+ 'O-R2-summary-ignored': [('scripts/projection_oracle.py', '            if kid.summary:\n                return True, "summary"', '            if False:\n                return True, "summary"')],
+ 'O-R2-required-dropped-in-true': [('scripts/projection_oracle.py', '            if kid.min > 0:\n                return True, "required"\n            if kid.summary', '            if kid.summary')],
+ 'O-R2-modifier-dropped-in-true': [('scripts/projection_oracle.py', '            if kid.modifier:\n                return True, "modifier"\n            return False, None\n        # text', '            return False, None\n        # text')],
+ 'O-R2-text-without-meta': [('scripts/projection_oracle.py', 'kid.elname in (N_TEXT, N_ID, N_META):', 'kid.elname in (N_TEXT, N_ID):')],
+ 'O-R2-elements-without-id': [('scripts/projection_oracle.py', 'kid.elname in names or kid.elname in (N_ID, N_META)', 'kid.elname in names or kid.elname in (N_META,)')],
+ 'O-R2-text-modifier-dropped': [('scripts/projection_oracle.py', '        if kid.min > 0:\n            return True, "required"\n        if kid.modifier:\n            return True, "modifier"\n        return False, None\n\n    def level', '        if kid.min > 0:\n            return True, "required"\n        return False, None\n\n    def level')],
+ 'O-R3-extension-altered': [('scripts/projection_oracle.py', '                self.hit("R3.extension_whole")\n                out[k] = v', '                self.hit("R3.extension_whole")\n                out[k] = [{kk: vv for kk, vv in o.items() if kk != "url"} if type(o) is dict else o for o in (v if type(v) is list else [v])]')],
+ 'O-D1-extension-filtered-as-complex': [('scripts/projection_oracle.py', '            elif kind == "ext":', '            elif False:')],
+ 'O-R4-underscore-unfiltered': [('scripts/projection_oracle.py', 'fe, l = self.level(ei, self.element_node, "true", None, False)', 'fe, l = ei, False')],
+ 'O-D8-mandatory-pair-not-whole': [('scripts/projection_oracle.py', '        if kid.min > 0:\n            self.hit("R4.mandatory_pair_whole")', '        if False:\n            self.hit("R4.mandatory_pair_whole")')],
+ 'O-R4-null-only-array-kept': [('scripts/projection_oracle.py', '            return kx, (ke if has_e else MISS), lost', '            return kx, (ke if ev is not MISS else MISS), lost')],
+ 'O-R5-empty-object-kept': [('scripts/projection_oracle.py', '                    if not r:\n                        if kid.min > 0:', '                    if False:\n                        if kid.min > 0:')],
+ 'O-D8-occurrence-not-whole': [('scripts/projection_oracle.py', '                        if kid.min > 0:\n                            self.hit("R5.mandatory_occurrence_whole")', '                        if False:\n                            self.hit("R5.mandatory_occurrence_whole")')],
+ 'O-R5-empty-primitive-kept': [('scripts/projection_oracle.py', '            if xi is None and fe is None:\n                lost = True', '            if False:\n                lost = True')],
+ 'O-R6-nested-not-projected-true': [('scripts/projection_oracle.py', '                    self.hit("R6.nested_projected")\n                    r, l = self.resource(o, "true", None)', '                    self.hit("R6.nested_projected")\n                    r, l = o, False')],
+ 'O-R6-nested-not-projected-data': [('scripts/projection_oracle.py', 'r, l = self.resource(o, "data", None)', 'r, l = o, False')],
+ 'O-D9-closure-not-transitive': [('scripts/projection_oracle.py', '                todo.extend(sub)', '                pass')],
+ 'O-D9-canonical-ignored': [('scripts/projection_oracle.py', 'kid.tname == T_CANONICAL or (node.key[0] == T_REFERENCE', '(node.key[0] == T_REFERENCE')],
+ 'O-D9-all-contained-kept': [('scripts/projection_oracle.py', '        refs = set()\n        self.scan(out, node, refs)', '        refs = set(by_id)')],
+ 'O-D9-contained-kept-unprojected': [('scripts/projection_oracle.py', '                    proj, l = self.resource(c, "true", None)', '                    proj, l = c, False')],
+ 'O-D9-contained-in-wrong-position': [('scripts/projection_oracle.py', '            if not placed:\n                items.append((N_CONTAINED, res))', '            if True:\n                items = [i for i in items if i[0] != N_CONTAINED]\n                items.append((N_CONTAINED, res))')],
+ 'O-D9-reference-in-extension-ignored': [('scripts/projection_oracle.py', '            elif kid.kind in ("cx", "ext"):\n                child = self.model.nodes[kid.nkey]\n                for o in (v if type(v) is list else [v]):\n                    if type(o) is dict:\n                        self.scan(o, child, refs)', '            elif kid.kind in ("cx",):\n                child = self.model.nodes[kid.nkey]\n                for o in (v if type(v) is list else [v]):\n                    if type(o) is dict:\n                        self.scan(o, child, refs)')],
+ 'O-R8-tag-duplicated': [('scripts/projection_oracle.py', 't.get("code") == SUBSETTED_CODE)', 't.get("code") == "x")')],
+ 'O-R8-tag-without-display': [('scripts/projection_oracle.py', '        if self.display is not None:\n            coding', '        if False:\n            coding')],
+ 'O-R8-no-tag-on-loss': [('scripts/projection_oracle.py', '        if lost:\n            out = self.add_tag(out, node)', '        if False:\n            out = self.add_tag(out, node)')],
+ 'O-R8-nested-loss-ignored': [('scripts/projection_oracle.py', '                    res.append(r)\n                    lost = lost or l\n                if res:', '                    res.append(r)\n                if res:')],
+ 'O-R9-duplicate-key-accepted': [('scripts/projection_oracle.py', '        if k in d:\n            raise OracleError("duplicate key %r" % k)', '        if False:\n            raise OracleError("duplicate key %r" % k)')],
+ 'O-R9-non-json-constant-accepted': [('scripts/projection_oracle.py', '    raise OracleError("non-JSON constant %s" % c)', '    return 0')],
 }
 
 def sha(*parts):
@@ -380,7 +450,7 @@ def tree_hash():
     for root, dirs, files in os.walk(R):
         dirs[:] = sorted(d for d in dirs if d not in (".git", ".cache", "__pycache__", "docs"))
         for f in sorted(files):
-            if f.endswith(".go") or "testdata" in os.path.relpath(root, R).split(os.sep) or f in ("packages.sha256", "go.mod", "model_oracle.py"):
+            if f.endswith(".go") or "testdata" in os.path.relpath(root, R).split(os.sep) or f in ("packages.sha256", "go.mod", "model_oracle.py", "projection_oracle.py"):
                 p = os.path.join(root, f)
                 items.append(os.path.relpath(p, R))
                 items.append(open(p, "rb").read())
@@ -396,6 +466,79 @@ def load_cache():
 def save_cache(entries):
     os.makedirs(os.path.dirname(CACHE), exist_ok=True)
     json.dump({"version": CACHE_VERSION, "entries": entries}, open(CACHE, "w"), indent=1, sort_keys=True)
+
+PARITY_RUN = "TestProjectionParity|TestComparisonRejects"
+
+def parity_fast(dst, work, env):
+    """Corre el módulo parity/ de la copia con el corpus rápido (oficiales y hand,
+    sin Synthea ni generados), parando en el primer desacuerdo."""
+    link = os.path.join(work, "go-searchindex")
+    if not os.path.exists(link):
+        os.symlink(os.path.join(os.path.dirname(R), "go-searchindex"), link)
+    penv = dict(env, PARITY_CORPUS="fast")
+    start = time.time()
+    try:
+        out = subprocess.run(["go", "test", "-failfast", "-count=1", "-run", PARITY_RUN, "./..."],
+                             cwd=os.path.join(dst, "parity"), env=penv, capture_output=True, text=True, timeout=900).stdout
+    except subprocess.TimeoutExpired:
+        return ["timeout"], 900, None
+    secs = round(time.time() - start, 1)
+    if "[build failed]" in out:
+        return [], secs, "parity does not compile: " + out.strip().splitlines()[0][:150]
+    if "ORACLE-PROTOCOL-FAILURE" in out:
+        m = re.search(r"ORACLE-PROTOCOL-FAILURE: ([^\n]{0,120})", out)
+        return [], secs, "oracle protocol failure (not a detection): " + (m.group(1) if m else "")
+    by = sorted(set(re.findall(r"^--- FAIL: (\S+)", out, re.M)))
+    return by, secs, None
+
+def run_oracle_mutation(name, dst, work, env, pk):
+    """Mutación de scripts/projection_oracle.py en una copia: la ve el --self-test
+    (barato) o, si no, la comparación exacta del módulo parity/. Solo cuenta como
+    detección una falla identificable del --self-test (la línea `FAILED n` en su
+    salida con código 1); un oráculo que no compila o no arranca es un error de la
+    mutación, no una detección (code review o1, hallazgo 4)."""
+    start = time.time()
+    script = os.path.join("scripts", "projection_oracle.py")
+    pc = subprocess.run(["python3", "-I", "-m", "py_compile", script], cwd=dst, env=env, capture_output=True, text=True, timeout=300)
+    if pc.returncode != 0:
+        return {"status": "error", "detail": "the mutated oracle does not compile: " + (pc.stderr.strip().splitlines() or ["?"])[-1][:150]}
+    st = subprocess.run(["python3", "-I", script, "--self-test", "--packages", pk],
+                        cwd=dst, env=env, capture_output=True, text=True, timeout=900)
+    secs = round(time.time() - start, 1)
+    if st.returncode == 0:
+        pass
+    elif st.returncode == 1 and re.search(r"^FAILED \d+$", st.stdout, re.M) and re.search(r"^FAIL ", st.stderr, re.M):
+        return {"status": "detected", "by": ["--self-test"], "secs": secs}
+    else:
+        tail = (st.stderr.strip().splitlines() or st.stdout.strip().splitlines() or ["?"])[-1]
+        return {"status": "error", "detail": "the mutated oracle failed without a self-test assertion: " + tail[:150]}
+    pby, psecs, perr = parity_fast(dst, work, env)
+    if perr:
+        return {"status": "error", "detail": perr}
+    if pby:
+        return {"status": "detected", "by": pby, "secs": round(secs + psecs, 1)}
+    return {"status": "undetected", "secs": round(secs + psecs, 1)}
+
+def harness_self_check(tmp_root):
+    """Un oráculo roto de sintaxis debe dar status error, nunca detected."""
+    work = tempfile.mkdtemp(prefix="mut-check-", dir=tmp_root)
+    try:
+        r = run_mutation("O-selfcheck-syntax", [("scripts/projection_oracle.py", "import argparse", "import (")], tmp_root)
+        if r["status"] != "error":
+            sys.exit("harness self-check failed: a syntax-broken oracle was reported as %r" % r["status"])
+        # Compila y pasa el --self-test, pero se cae en el modo interactivo (code review o2, hallazgo 2).
+        r = run_mutation("O-selfcheck-interactive", [("scripts/projection_oracle.py", "proj = load_projector(a.lock, a.packages, counts)", "proj = load_projector(a.lcok, a.packages, counts)")], tmp_root)
+        if r["status"] != "error":
+            sys.exit("harness self-check failed: an oracle that only crashes in interactive mode was reported as %r" % r["status"])
+        # Code review o3: una respuesta que no es un sobre válido (`{}`) y un oráculo que
+        # contesta `error` a toda entrada (run_line con proj=None) no son detecciones.
+        anchor = "out.write(run_line(proj, line) + \"\\n\")"
+        for nm, repl in (("envelope", "out.write(\"{}\\n\")"), ("error-reply", "out.write(run_line(None, line) + \"\\n\")")):
+            r = run_mutation("O-selfcheck-" + nm, [("scripts/projection_oracle.py", anchor, repl)], tmp_root)
+            if r["status"] != "error":
+                sys.exit("harness self-check failed: an oracle with a %s reply was reported as %r" % (nm, r["status"]))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
 
 def run_mutation(name, pairs, tmp_root):
     work = tempfile.mkdtemp(prefix="mut-", dir=tmp_root)
@@ -414,8 +557,10 @@ def run_mutation(name, pairs, tmp_root):
         if name.startswith("P-"):
             # Solo los oráculos de parity/ (otro módulo, con replace a ../../go-searchindex).
             os.symlink(os.path.join(os.path.dirname(R), "go-searchindex"), os.path.join(work, "go-searchindex"))
-            cmd = ["go", "test", "-short", "-count=1", "-run", "TestParityWithModels|TestSearchIndexDifferential|TestFHIRPathAnalyzeDifferential|TestKnownLoss|TestNormalizerParity|TestPathNameAgreesWithTheLibrary", "./..."]
+            cmd = ["go", "test", "-short", "-count=1", "-run", "TestParityWithModels|TestSearchIndexDifferential|TestFHIRPathAnalyzeDifferential|TestKnownLoss|TestNormalizerParity|TestPathNameAgreesWithTheLibrary|TestProjectionParity|TestComparisonRejects", "./..."]
             cwd = os.path.join(dst, "parity")
+        if name.startswith("O-"):
+            return run_oracle_mutation(name, dst, work, env, pk)
         start = time.time()
         try:
             out = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=900).stdout
@@ -425,6 +570,17 @@ def run_mutation(name, pairs, tmp_root):
         if "[build failed]" in out or "\n# " in "\n" + out and "cannot" in out and "--- FAIL" not in out:
             return {"status": "error", "detail": "does not compile: " + out.strip().splitlines()[0][:150]}
         by = sorted(set(re.findall(r"^--- FAIL: (\S+)", out, re.M)))
+        if by and not (name.startswith("PR-") and os.environ.get("MUTATION_PARITY_ALSO") == "1"):
+            return {"status": "detected", "by": by, "secs": secs}
+        if name.startswith("PR-"):
+            # Plan 005 §13.4: lo que no ve el módulo raíz (o todo, con MUTATION_PARITY_ALSO=1)
+            # lo debe ver la comparación exacta con el oráculo, sobre el corpus rápido.
+            pby, psecs, perr = parity_fast(dst, work, env)
+            if perr:
+                return {"status": "error", "detail": perr}
+            if pby or by:
+                return {"status": "detected", "by": sorted(set(by + pby)), "secs": secs, "parity_secs": psecs, "parity_sees": bool(pby)}
+            return {"status": "undetected", "secs": secs, "parity_secs": psecs}
         if by:
             return {"status": "detected", "by": by, "secs": secs}
         if re.search(r"^FAIL", out, re.M):
@@ -434,6 +590,11 @@ def run_mutation(name, pairs, tmp_root):
         shutil.rmtree(work, ignore_errors=True)
 
 def main():
+    tmp_root = os.environ.get("TMPDIR", tempfile.gettempdir())
+    harness_self_check(tmp_root)
+    if "--self-check" in sys.argv:
+        print("harness self-check: ok")
+        return
     prefixes = sys.argv[1:]
     names = [n for n in muts if not prefixes or any(n.startswith(p) for p in prefixes)]
     if not names:
@@ -442,7 +603,6 @@ def main():
     fresh = os.environ.get("MUTATION_FRESH") == "1"
     base = tree_hash()
     cache = {} if fresh else load_cache()
-    tmp_root = os.environ.get("TMPDIR", tempfile.gettempdir())
     keys = {n: sha(base, json.dumps(muts[n]), subprocess.run(["go", "version"], capture_output=True, text=True).stdout) for n in names}
     results = {}
     todo = []
@@ -474,7 +634,8 @@ def main():
         for n in names:
             r = results[n]
             by = ", ".join(r.get("by", [])[:4]) + (" ..." if len(r.get("by", [])) > 4 else "")
-            f.write("| %s | %s%s | %s | %s |\n" % (n, r["status"], " (cached)" if r.get("cached") else "", by or r.get("detail", ""), r.get("secs", "")))
+            ps = ("; parity %s s%s" % (r["parity_secs"], "" if r.get("parity_sees", True) else ", parity does not see it")) if "parity_secs" in r else ""
+            f.write("| %s | %s%s | %s | %s%s |\n" % (n, r["status"], " (cached)" if r.get("cached") else "", by or r.get("detail", ""), r.get("secs", ""), ps))
         f.write("\n%s\n" % ("All mutations detected." if not bad else "**Not detected or invalid: %s**" % ", ".join(bad)))
     print(path)
     if bad:

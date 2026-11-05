@@ -395,8 +395,10 @@ var probeCases = []probe{
 	{name: "fhir-comments", in: `{"resourceType":"Patient","fhir_comments":["c"]}`, want: verdict{clsDeletes, "unknown-property (rule 6)"}},
 	{name: "underscore-on-complex", in: `{"resourceType":"Patient","_name":[{"family":"F"}]}`,
 		want: verdict{clsDeletes, "not-primitive (rule 4)"}},
+	// json.html R5 §2.1.6.4.2: el sufijo de nulls del arreglo más corto se infiere
+	// (decisión del 05-11-2026, en las tres versiones): Normalize lo rellena y models no.
 	{name: "underscore-array-shorter", in: `{"resourceType":"Patient","name":[{"given":["a","b"],"_given":[{"id":"x"}]}]}`,
-		want: verdict{clsKeepsBad, "length-mismatch (rule 6)"}},
+		want: verdict{clsTransforms, "other: changed Patient.name._given"}},
 	// Rutas con la regla de acentos graves (plan 004 regla 8) y la de _x desconocido.
 	{name: "property-name-with-a-dot", in: `{"resourceType":"Patient","a.b":1}`,
 		want: verdict{clsDeletes, "unknown-property (rule 6)"}},

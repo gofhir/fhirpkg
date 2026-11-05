@@ -187,6 +187,7 @@ func TestRealModelOracle(t *testing.T) {
 			took := time.Since(start)
 			refs, ftypes := map[string]string{}, map[string]string{}
 			cards := map[string][2]int{}
+			sums, mods := map[string]bool{}, map[string]bool{}
 			for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
 				f := strings.Split(line, "\t")
 				switch f[0] {
@@ -194,6 +195,10 @@ func TestRealModelOracle(t *testing.T) {
 					refs[f[1]] = f[2]
 				case "ftype":
 					ftypes[f[1]] = f[2]
+				case "sum":
+					sums[f[1]] = true
+				case "mod":
+					mods[f[1]] = true
 				case "card":
 					lo, _ := strconv.Atoi(f[2])
 					hi, _ := strconv.Atoi(f[3])
@@ -202,8 +207,21 @@ func TestRealModelOracle(t *testing.T) {
 					t.Fatalf("model_oracle.py: unexpected line %q", line)
 				}
 			}
-			seenRef, seenCard, seenFType := 0, 0, 0
+			seenRef, seenCard, seenFType, seenSum, seenMod := 0, 0, 0, 0, 0
 			for _, p := range m.Paths() {
+				// Plan 005: isSummary e isModifier, exactos contra el package en crudo.
+				if m.IsSummary(p) {
+					seenSum++
+					if !sums[p] {
+						t.Errorf("IsSummary(%s) is true, the oracle says false", p)
+					}
+				}
+				if m.IsModifier(p) {
+					seenMod++
+					if !mods[p] {
+						t.Errorf("IsModifier(%s) is true, the oracle says false", p)
+					}
+				}
 				if got := m.ReferenceTargets(p); len(got) > 0 {
 					seenRef++
 					if want, ok := refs[p]; !ok || strings.Join(got, ",") != want {
@@ -222,6 +240,9 @@ func TestRealModelOracle(t *testing.T) {
 						t.Errorf("FHIRTypeOf(%s) = %q, the oracle says %q", p, got, want)
 					}
 				}
+			}
+			if seenSum != len(sums) || seenMod != len(mods) {
+				t.Errorf("the model has %d summary and %d modifier paths; the oracle has %d and %d", seenSum, seenMod, len(sums), len(mods))
 			}
 			if seenRef != len(refs) || seenCard != len(cards) || seenFType != len(ftypes) {
 				t.Errorf("the model has %d reference, %d cardinality and %d fhir-type paths; the oracle has %d, %d and %d",
@@ -252,5 +273,57 @@ func TestRealModelIsPrimitive(t *testing.T) {
 		if !slices.Equal(got, w) {
 			t.Errorf("%s: primitives = %v, want %v", rc.name, got, w)
 		}
+	}
+}
+
+// Plan 005, revisión previa §2: las cuentas de isSummary, medidas por el oráculo
+// en los packages en crudo (scripts/model_oracle.py --counts) y escritas aquí a
+// mano desde el plan. Si el package o el oráculo cambian, el test dice cuál.
+func TestRealSummaryCounts(t *testing.T) {
+	py, err := exec.LookPath("python3")
+	if err != nil {
+		t.Skip("python3 is not installed")
+	}
+	dir := os.Getenv("FHIRPKG_PACKAGES")
+	type counts = map[string]int
+	want := map[string]counts{
+		"R4": {"sd": 209, "elements": 7466, "summary": 3266, "absent": 0, "own_required_not_summary": 296, "own_modifier_not_summary": 6,
+			"summary_under_non_summary": 68, "concrete": 146, "root_required_not_summary": 4, "root_modifier_not_summary": 0,
+			"nested_required_or_modifier_not_summary": 0, "DomainResource.modifierExtension.isSummary": 0, "BackboneElement.modifierExtension.isSummary": 1},
+		"R4B": {"sd": 206, "elements": 7579, "summary": 3211, "absent": 0, "own_required_not_summary": 318, "own_modifier_not_summary": 6,
+			"summary_under_non_summary": 76, "concrete": 141, "root_required_not_summary": 5, "root_modifier_not_summary": 0,
+			"nested_required_or_modifier_not_summary": 0, "DomainResource.modifierExtension.isSummary": 0, "BackboneElement.modifierExtension.isSummary": 1},
+		"R5": {"sd": 231, "elements": 9324, "summary": 4056, "absent": 0, "own_required_not_summary": 362, "own_modifier_not_summary": 5,
+			"summary_under_non_summary": 103, "concrete": 158, "root_required_not_summary": 4, "root_modifier_not_summary": 0,
+			"nested_required_or_modifier_not_summary": 0, "DomainResource.modifierExtension.isSummary": 1, "BackboneElement.modifierExtension.isSummary": 1},
+	}
+	for _, rc := range realModelCases {
+		t.Run(rc.name, func(t *testing.T) {
+			c, _ := realContext(t, rc.lock)
+			name, version, _ := strings.Cut(c.set.lock.Core, "#")
+			out, err := exec.Command(py, "-I", filepath.Join("scripts", "model_oracle.py"), filepath.Join(dir, name+"-"+version+".tgz"), "--counts").Output()
+			if err != nil {
+				t.Fatalf("model_oracle.py --counts: %v", err)
+			}
+			got := counts{}
+			for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+				k, v, _ := strings.Cut(line, "\t")
+				got[k], _ = strconv.Atoi(v)
+			}
+			for k, w := range want[rc.name] {
+				if got[k] != w {
+					t.Errorf("%s: %d, plan 005 §2 says %d", k, got[k], w)
+				}
+			}
+			// El modelo, por su lado: DomainResource.modifierExtension y el de BackboneElement.
+			m := c.Model()
+			if m.IsSummary("DomainResource.modifierExtension") != (want[rc.name]["DomainResource.modifierExtension.isSummary"] == 1) ||
+				m.IsSummary("BackboneElement.modifierExtension") != (want[rc.name]["BackboneElement.modifierExtension.isSummary"] == 1) {
+				t.Errorf("IsSummary of modifierExtension disagrees with the plan")
+			}
+			if !m.IsModifier("DomainResource.modifierExtension") || !m.IsModifier("Resource.implicitRules") || m.IsModifier("Patient.name") {
+				t.Error("IsModifier of modifierExtension, implicitRules or Patient.name")
+			}
+		})
 	}
 }

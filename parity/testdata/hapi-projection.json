@@ -1,0 +1,380 @@
+[
+ {
+  "version": "R4B",
+  "mode": "data",
+  "class": "fhirpkg only: data keeps everything but text",
+  "count": 7
+ },
+ {
+  "version": "R4B",
+  "mode": "data",
+  "class": "fhirpkg only: inside a whole copy or a recursive projection",
+  "count": 17
+ },
+ {
+  "version": "R4B",
+  "mode": "data",
+  "class": "same keys",
+  "count": 2712
+ },
+ {
+  "version": "R4B",
+  "mode": "elements",
+  "class": "HAPI only: not requested",
+  "count": 37
+ },
+ {
+  "version": "R4B",
+  "mode": "elements",
+  "class": "fhirpkg only: contained referenced (D9)",
+  "count": 78
+ },
+ {
+  "version": "R4B",
+  "mode": "elements",
+  "class": "fhirpkg only: inside a whole copy or a recursive projection",
+  "count": 16
+ },
+ {
+  "version": "R4B",
+  "mode": "elements",
+  "class": "fhirpkg only: mandatory (D4)",
+  "count": 1864
+ },
+ {
+  "version": "R4B",
+  "mode": "elements",
+  "class": "fhirpkg only: modifier (D4)",
+  "count": 33
+ },
+ {
+  "version": "R4B",
+  "mode": "elements",
+  "class": "fhirpkg only: requested name",
+  "count": 4
+ },
+ {
+  "version": "R4B",
+  "mode": "elements",
+  "class": "same keys",
+  "count": 818
+ },
+ {
+  "version": "R4B",
+  "mode": "text",
+  "class": "fhirpkg only: contained referenced (D9)",
+  "count": 67
+ },
+ {
+  "version": "R4B",
+  "mode": "text",
+  "class": "fhirpkg only: modifier (D10)",
+  "count": 81
+ },
+ {
+  "version": "R4B",
+  "mode": "text",
+  "class": "same keys",
+  "count": 2588
+ },
+ {
+  "version": "R4B",
+  "mode": "true",
+  "class": "HAPI only: inside a whole copy or a recursive projection",
+  "count": 4
+ },
+ {
+  "version": "R4B",
+  "mode": "true",
+  "class": "HAPI only: not isSummary, not min 1, not a modifier",
+  "count": 3
+ },
+ {
+  "version": "R4B",
+  "mode": "true",
+  "class": "fhirpkg only: contained referenced (D9)",
+  "count": 99
+ },
+ {
+  "version": "R4B",
+  "mode": "true",
+  "class": "fhirpkg only: inside a whole copy or a recursive projection",
+  "count": 13
+ },
+ {
+  "version": "R4B",
+  "mode": "true",
+  "class": "fhirpkg only: mandatory (D8)",
+  "count": 22
+ },
+ {
+  "version": "R4B",
+  "mode": "true",
+  "class": "fhirpkg only: modifier (D10)",
+  "count": 1
+ },
+ {
+  "version": "R4B",
+  "mode": "true",
+  "class": "same keys",
+  "count": 2595
+ },
+ {
+  "version": "R4",
+  "mode": "data",
+  "class": "fhirpkg only: data keeps everything but text",
+  "count": 7
+ },
+ {
+  "version": "R4",
+  "mode": "data",
+  "class": "fhirpkg only: inside a whole copy or a recursive projection",
+  "count": 7
+ },
+ {
+  "version": "R4",
+  "mode": "data",
+  "class": "same keys",
+  "count": 5204
+ },
+ {
+  "version": "R4",
+  "mode": "elements",
+  "class": "HAPI only: not requested",
+  "count": 741
+ },
+ {
+  "version": "R4",
+  "mode": "elements",
+  "class": "fhirpkg only: contained referenced (D9)",
+  "count": 82
+ },
+ {
+  "version": "R4",
+  "mode": "elements",
+  "class": "fhirpkg only: inside a whole copy or a recursive projection",
+  "count": 6
+ },
+ {
+  "version": "R4",
+  "mode": "elements",
+  "class": "fhirpkg only: mandatory (D4)",
+  "count": 3941
+ },
+ {
+  "version": "R4",
+  "mode": "elements",
+  "class": "fhirpkg only: modifier (D4)",
+  "count": 34
+ },
+ {
+  "version": "R4",
+  "mode": "elements",
+  "class": "fhirpkg only: requested name",
+  "count": 2
+ },
+ {
+  "version": "R4",
+  "mode": "elements",
+  "class": "same keys",
+  "count": 1240
+ },
+ {
+  "version": "R4",
+  "mode": "text",
+  "class": "fhirpkg only: contained referenced (D9)",
+  "count": 67
+ },
+ {
+  "version": "R4",
+  "mode": "text",
+  "class": "fhirpkg only: mandatory (D8)",
+  "count": 2083
+ },
+ {
+  "version": "R4",
+  "mode": "text",
+  "class": "fhirpkg only: modifier (D10)",
+  "count": 81
+ },
+ {
+  "version": "R4",
+  "mode": "text",
+  "class": "same keys",
+  "count": 2987
+ },
+ {
+  "version": "R4",
+  "mode": "true",
+  "class": "HAPI only: inside a whole copy or a recursive projection",
+  "count": 5
+ },
+ {
+  "version": "R4",
+  "mode": "true",
+  "class": "HAPI only: not isSummary, not min 1, not a modifier",
+  "count": 3
+ },
+ {
+  "version": "R4",
+  "mode": "true",
+  "class": "fhirpkg only: contained referenced (D9)",
+  "count": 98
+ },
+ {
+  "version": "R4",
+  "mode": "true",
+  "class": "fhirpkg only: inside a whole copy or a recursive projection",
+  "count": 2
+ },
+ {
+  "version": "R4",
+  "mode": "true",
+  "class": "fhirpkg only: isSummary",
+  "count": 1451
+ },
+ {
+  "version": "R4",
+  "mode": "true",
+  "class": "fhirpkg only: mandatory (D8)",
+  "count": 17
+ },
+ {
+  "version": "R4",
+  "mode": "true",
+  "class": "fhirpkg only: modifier (D10)",
+  "count": 1
+ },
+ {
+  "version": "R4",
+  "mode": "true",
+  "class": "same keys",
+  "count": 3642
+ },
+ {
+  "version": "R5",
+  "mode": "data",
+  "class": "fhirpkg only: data keeps everything but text",
+  "count": 12
+ },
+ {
+  "version": "R5",
+  "mode": "data",
+  "class": "fhirpkg only: inside a whole copy or a recursive projection",
+  "count": 17
+ },
+ {
+  "version": "R5",
+  "mode": "data",
+  "class": "same keys",
+  "count": 2676
+ },
+ {
+  "version": "R5",
+  "mode": "elements",
+  "class": "HAPI only: not requested",
+  "count": 10
+ },
+ {
+  "version": "R5",
+  "mode": "elements",
+  "class": "fhirpkg only: contained referenced (D9)",
+  "count": 87
+ },
+ {
+  "version": "R5",
+  "mode": "elements",
+  "class": "fhirpkg only: inside a whole copy or a recursive projection",
+  "count": 17
+ },
+ {
+  "version": "R5",
+  "mode": "elements",
+  "class": "fhirpkg only: mandatory (D4)",
+  "count": 1984
+ },
+ {
+  "version": "R5",
+  "mode": "elements",
+  "class": "fhirpkg only: modifier (D4)",
+  "count": 44
+ },
+ {
+  "version": "R5",
+  "mode": "elements",
+  "class": "fhirpkg only: requested name",
+  "count": 4
+ },
+ {
+  "version": "R5",
+  "mode": "elements",
+  "class": "same keys",
+  "count": 671
+ },
+ {
+  "version": "R5",
+  "mode": "text",
+  "class": "fhirpkg only: contained referenced (D9)",
+  "count": 72
+ },
+ {
+  "version": "R5",
+  "mode": "text",
+  "class": "fhirpkg only: modifier (D10)",
+  "count": 125
+ },
+ {
+  "version": "R5",
+  "mode": "text",
+  "class": "same keys",
+  "count": 2508
+ },
+ {
+  "version": "R5",
+  "mode": "true",
+  "class": "HAPI only: inside a whole copy or a recursive projection",
+  "count": 6
+ },
+ {
+  "version": "R5",
+  "mode": "true",
+  "class": "HAPI only: not isSummary, not min 1, not a modifier",
+  "count": 8
+ },
+ {
+  "version": "R5",
+  "mode": "true",
+  "class": "array length differs",
+  "count": 2
+ },
+ {
+  "version": "R5",
+  "mode": "true",
+  "class": "fhirpkg only: contained referenced (D9)",
+  "count": 106
+ },
+ {
+  "version": "R5",
+  "mode": "true",
+  "class": "fhirpkg only: inside a whole copy or a recursive projection",
+  "count": 14
+ },
+ {
+  "version": "R5",
+  "mode": "true",
+  "class": "fhirpkg only: isSummary",
+  "count": 1
+ },
+ {
+  "version": "R5",
+  "mode": "true",
+  "class": "fhirpkg only: mandatory (D8)",
+  "count": 12
+ },
+ {
+  "version": "R5",
+  "mode": "true",
+  "class": "same keys",
+  "count": 2558
+ }
+]

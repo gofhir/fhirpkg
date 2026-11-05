@@ -20,7 +20,9 @@ type Model struct {
 	children  map[string][]string
 	fhirType  map[string]string
 	card      map[string]cardinality
-	norm      normState // plan 004: la caché del normalizador
+	summary   map[string]bool // plan 005: los caminos con isSummary verdadero
+	modifier  map[string]bool // plan 005: los caminos con isModifier verdadero
+	norm      normState       // plan 004: la caché del normalizador
 }
 
 type typeInfo struct {
@@ -109,6 +111,17 @@ func (m *Model) Cardinality(path string) (min, max int, ok bool) {
 	c, ok := m.card[path]
 	return int(c.min), int(c.max), ok
 }
+
+// IsSummary informa si el elemento tiene ElementDefinition.isSummary verdadero
+// en el snapshot del tipo que lo define (plan 005): el de un hijo de un tipo de
+// datos está en el tipo ("HumanName.family"), no en el elemento que lo usa. Un
+// elemento con varios tipos responde por su camino sin sufijo y por cada
+// variante, como Cardinality. Es false si el camino no existe.
+func (m *Model) IsSummary(path string) bool { return m.summary[path] }
+
+// IsModifier informa si el elemento tiene ElementDefinition.isModifier
+// verdadero (plan 005); se lee igual que IsSummary.
+func (m *Model) IsModifier(path string) bool { return m.modifier[path] }
 
 // Types son los nombres de los tipos, ordenados. Es una copia.
 func (m *Model) Types() []string { return append([]string(nil), m.names...) }

@@ -1,6 +1,6 @@
 # ADR-004 — Qué es un tipo del modelo de FHIRPath
 
-**Estado:** Propuesta. D1 a D3 decididos (D2 por el usuario el 02-11-2026, con la especificación). Pasa a Aceptada cuando termine el code review del plan 003 y CI corra en verde. **Plan:** [003](../plans/003-modelo-de-tipos.md). **Evidencia:** [`2026-11-02-validator-types.md`](../evidence/2026-11-02-validator-types.md) (`make validator-types`).
+**Estado:** Aceptada el 03-11-2026: code review del plan 003 convergido y CI en verde ([corrida 41611913463](https://github.com/gofhir/fhirpkg/actions/runs/41611913463)). D1 a D3 decididos (D2 por el usuario el 02-11-2026, con la especificación). **Plan:** [003](../plans/003-modelo-de-tipos.md). **Evidencia:** [`2026-11-02-validator-types.md`](../evidence/2026-11-02-validator-types.md) (`make validator-types`).
 
 ## Contexto
 

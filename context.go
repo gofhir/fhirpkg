@@ -111,6 +111,7 @@ type Context struct {
 	chains     map[string][]string          // tipo -> él y sus bases por baseDefinition
 	spByType   map[string][]SearchParameter // resultado de SearchParameters
 	model      *Model                       // plan 003: se construye en NewContext
+	subsetted  subsettedTag                 // plan 005: el tag SUBSETTED, armado en la primera Projection
 }
 
 // commonDoc son los campos que deciden entre candidatos, comunes a los

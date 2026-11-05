@@ -24,6 +24,8 @@ type elementDoc struct {
 	Path             string `json:"path"`
 	Min              *int   `json:"min"`
 	Max              string `json:"max"`
+	IsSummary        bool   `json:"isSummary"`
+	IsModifier       bool   `json:"isModifier"`
 	ContentReference string `json:"contentReference"`
 	Base             struct {
 		Path string `json:"path"`
@@ -114,6 +116,8 @@ func (c *Context) buildModel(keys []key, docs map[*cand]parsed) (*Model, error) 
 		children:  map[string][]string{},
 		fhirType:  map[string]string{},
 		card:      map[string]cardinality{},
+		summary:   map[string]bool{},
+		modifier:  map[string]bool{},
 	}
 	for name := range defs {
 		m.names = append(m.names, name)
@@ -332,6 +336,12 @@ func (b *modelBuilder) addElements(d *typeDef) error {
 			}
 			claimed[path] = e.Path
 			m.card[path] = cardinality{lo, hi}
+			if e.IsSummary {
+				m.summary[path] = true
+			}
+			if e.IsModifier {
+				m.modifier[path] = true
+			}
 			return nil
 		}
 		if e.ContentReference != "" {

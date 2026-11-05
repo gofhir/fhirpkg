@@ -1,0 +1,56 @@
+[
+ {
+  "rule": "profile",
+  "match": "^error\\|structure\\|[^|]*\\|[^|]*: minimum required = 1, but only found 0 \\(from http://hl7\\.org/fhir/StructureDefinition/(shareablevalueset|shareablecodesystem|bmi|vitalsigns)\\|",
+  "reason": "The validator applies profiles (shareablecodesystem and shareablevalueset to every terminology resource; bmi and vitalsigns from meta.profile) whose min is above the base min. D8 keeps only the min of the base resource, which is all the package of the version gives a profile-free projection.",
+  "count": 111
+ },
+ {
+  "rule": "profile",
+  "match": "^error\\|structure\\|[^|]*\\|Slice '[^']*': a matching slice is required, but not found \\(from http://hl7\\.org/fhir/StructureDefinition/(bmi|vitalsigns)\\|",
+  "reason": "A required slice of the vitalsigns and bmi profiles: the profile asks for a category or a value[x] slice that the summary or text projection leaves out; slicing is profile-level and not in the base min.",
+  "count": 5
+ },
+ {
+  "rule": "rule 10",
+  "match": "^error\\|invariant\\|[^|]*\\|Constraint failed: (sdf-6|sdf-4|sdf-5|cpb-1|cpb-2|cpb-14|cpb-15|tcp-2|tcp-3|app-2|app-3|scs-2|ppc-1|org-1|apr-1|vs-2|tsk-1|sst-1|bdl-12|bdl-13):",
+  "reason": "An invariant over elements the projection dropped (and the resource carries the SUBSETTED tag that says so): the summary of a resource is not required to satisfy the constraints of the elements it leaves out.",
+  "count": 68
+ },
+ {
+  "rule": "rule 10",
+  "match": "^error\\|invalid\\|StructureDefinition\\|The value of Extension\\.url is not fixed to the extension URL ",
+  "reason": "A StructureDefinition of an extension projected with true loses its differential and snapshot, which are what fixes Extension.url; the validator then judges the resource as a bare extension definition.",
+  "count": 4
+ },
+ {
+  "rule": "D9",
+  "match": "^error\\|invalid\\|[^|]*\\.contained\\|The contained resource '[^']*' is not referenced to from elsewhere in the containing resource nor does it refer to the containing resource \\(dom-3\\)",
+  "reason": "_elements names contained explicitly: the request is honored whole (D4) even when the element that referred to it was left out.",
+  "count": 11
+ },
+ {
+  "rule": "validator",
+  "match": "^crash\\|\\|org\\.hl7\\.fhir\\.exceptions\\.FHIRException: org\\.hl7\\.fhir\\.exceptions\\.FHIRException: Ambiguous type Extension",
+  "reason": "validator_cli 7.0.2 dies with 'Ambiguous type Extension' while building the OperationOutcome of a StructureDefinition of an extension that has no snapshot or differential (text and _elements modes); the input of the same resource does not crash.",
+  "count": 6
+ },
+ {
+  "rule": "validator",
+  "match": "^error\\|(code-invalid\\|[^|]*\\|The value provided \\('[^']*'\\) was not found in the value set '(Mime Types|Currencies)'|not-found\\|[^|]*\\|The System URI could not be determined for the code '[^']*' in the ValueSet 'http://hl7\\.org/fhir/ValueSet/(mimetypes|currencies)\\|)",
+  "reason": "Without a terminology server (-tx n/a) validator_cli cannot check codes of the mimetypes and currencies value sets, and reports that once per session, on the first file that has them. Verified by hand: ChargeItemDefinition-device.input.json and its data projection give 2 and 0 of these errors when their order in the same session is swapped. The report depends on the batch, not on the resource.",
+  "count": 16
+ },
+ {
+  "rule": "rule 10",
+  "match": "^error\\|business-rule\\|CodeSystem\\|CodeSystem null has an 'all system' value set of ",
+  "reason": "_elements keeps CodeSystem.valueSet but not CodeSystem.url (not named, not min 1); the validator checks the all-system value set against the url of the CodeSystem, which is now absent. The _elements request is honored as asked.",
+  "count": 2
+ },
+ {
+  "rule": "rule 10",
+  "match": "^error\\|invalid\\|Bundle\\|Documents or Messages must contain at least one entry",
+  "reason": "A Bundle of type document or message projected with text keeps only text, id, meta and the base min>0, so its entry is dropped; the validator requires at least one entry for these types.",
+  "count": 1
+ }
+]

@@ -195,9 +195,24 @@ var normCases = []normCase{
 	{name: "variant-with-its-own-underscore-is-fine", cite: "json.html §2.6.2.3",
 		in:   obsPre + `"_valueString":{"id":"x"},"valueString":"a"}`,
 		want: `{"resourceType":"Observation","status":"final","code":{"text":"t"},"valueString":"a","_valueString":{"id":"x"}}`},
-	{name: "array-lengths-differ", cite: "json.html §2.6.2.3: los dos arreglos tienen el mismo largo",
+	{name: "underscore-array-shorter-is-padded-with-nulls", cite: "json.html R5 §2.1.6.4.2: implementations SHALL infer null values in the suffix of the shorter array (R4 y R4B callan; mismo comportamiento)",
 		in:   `{"resourceType":"Patient","name":[{"given":["a","b"],"_given":[{"id":"x"}]}]}`,
-		errs: []string{"length-mismatch@Patient.name[0].given"}},
+		want: `{"resourceType":"Patient","name":[{"given":["a","b"],"_given":[{"id":"x"},null]}]}`},
+	{name: "value-array-shorter-is-padded-with-nulls", cite: "json.html R5 §2.1.6.4.2: sufijo de nulls inferido en el arreglo más corto",
+		in:   `{"resourceType":"Patient","name":[{"given":["a"],"_given":[null,{"id":"x"}]}]}`,
+		want: `{"resourceType":"Patient","name":[{"given":["a",null],"_given":[null,{"id":"x"}]}]}`},
+	{name: "padding-an-all-null-underscore", cite: "json.html R5 §2.1.6.4.2",
+		in:   `{"resourceType":"Patient","name":[{"given":["a","b"],"_given":[null]}]}`,
+		want: `{"resourceType":"Patient","name":[{"given":["a","b"],"_given":[null,null]}]}`},
+	{name: "null-value-beyond-the-shorter-underscore", cite: "json.html §2.6.2.3: un null del valor necesita un _x en la misma posición; el sufijo inferido es null",
+		in:   `{"resourceType":"Patient","name":[{"given":["a",null],"_given":[{"id":"x"}]}]}`,
+		errs: []string{"null@Patient.name[0].given[1]"}},
+	{name: "null-underscore-beyond-the-shorter-value", cite: "json.html §2.6.2.3: un null de _x necesita un valor en la misma posición",
+		in:   `{"resourceType":"Patient","name":[{"given":["a"],"_given":[{"id":"x"},null]}]}`,
+		errs: []string{"null@Patient.name[0].given[1]"}},
+	{name: "shape-error-with-a-shorter-array", cite: "json.html §2.6.2: un elemento que se repite es un arreglo",
+		in:   `{"resourceType":"Patient","name":[{"given":["a","b"],"_given":{"id":"x"}}]}`,
+		errs: []string{"wrong-shape@Patient.name[0].given"}},
 	{name: "object-where-an-array-goes", cite: "json.html §2.6.2: un elemento que se repite es un arreglo",
 		in: `{"resourceType":"Patient","name":{"family":"F"}}`, errs: []string{"wrong-shape@Patient.name"}},
 	{name: "array-where-an-object-goes", cite: "json.html §2.6.2: un elemento que no se repite no es un arreglo",
@@ -467,5 +482,28 @@ func TestNormalizeOutputDoesNotHoldTheInputsSpace(t *testing.T) {
 	}
 	if limit := len(out) + len(out)/8 + 64; cap(out) > limit {
 		t.Errorf("the output holds %d bytes for %d of content (input %d)", cap(out), len(out), len(in))
+	}
+}
+
+// Regla 9 del plan 005: Normalize y Project informan los mismos errores en el
+// mismo orden. Con `_given:[42,null]` y un solo valor, el `_x[0]` mal formado
+// (posición 0) va antes que el null sin valor (posición 1, el sufijo inferido de
+// json.html R5 §2.1.6.4.2), y con WithMaxErrors(1) los dos caminos informan lo mismo.
+func TestErrorOrderOfAnInferredSuffixIsTheSameInNormalizeAndProject(t *testing.T) {
+	in := `{"resourceType":"Patient","name":[{"given":["A"],"_given":[42,null]}]}`
+	for _, tg := range normTargets(t) {
+		_, nerr := tg.ctx.Normalize([]byte(in), WithMaxErrors(1))
+		p, err := tg.ctx.NewProjection("Patient", SummaryTrue, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, perr := tg.ctx.Project([]byte(in), p, WithMaxErrors(1))
+		if nerr == nil || perr == nil {
+			t.Fatalf("%s: no error (%v, %v)", tg.name, nerr, perr)
+		}
+		ns, ps := errSummary(nerr), errSummary(perr)
+		if !slices.Equal(ns, ps) || len(ns) != 1 || !strings.Contains(ns[0], "given[0]") {
+			t.Errorf("%s: Normalize %q, Project %q; want the same single error at given[0]", tg.name, ns, ps)
+		}
 	}
 }

@@ -32,7 +32,7 @@ Cuarto incremento de `gofhir/fhirpkg` (tajada 1a). La carta (`NUCLEO.md` §6, ta
 
 - `Context.Normalize(data []byte) ([]byte, error)`: recibe un recurso JSON y devuelve los mismos datos con las propiedades en el orden del modelo, sin espacios, con los arreglos en su orden.
 - Recursos anidados por su propio `resourceType`: `contained`, `Bundle.entry.resource`, `Parameters.parameter.resource` y todo elemento de tipo `Resource` (sale del modelo, sin nombres).
-- Errores con ruta FHIRPath-like (`Patient.name[0].givenx`): propiedad desconocida, `resourceType` desconocido o ausente donde se espera un recurso, `_x` sobre un elemento que no es primitivo, dos variantes del mismo `[x]`, arreglos `x`/`_x` de distinto largo, un valor JSON de la forma equivocada (objeto donde va arreglo y viceversa), clave duplicada.
+- Errores con ruta FHIRPath-like (`Patient.name[0].givenx`): propiedad desconocida, `resourceType` desconocido o ausente donde se espera un recurso, `_x` sobre un elemento que no es primitivo, dos variantes del mismo `[x]`, un valor JSON de la forma equivocada (objeto donde va arreglo y viceversa), clave duplicada.
 - Paridad de orden con `models` (módulo `parity/`) y benchmark de tiempo y asignaciones contra `models` (`UnmarshalResource` + `Marshal`).
 
 **Fuera:** la proyección `_summary`/`_elements` y `isSummary` (propuesta: incremento 005, D1), la validación de tipos de valores primitivos, de cardinalidad y de invariantes (es del validador), XML, perfiles.
@@ -181,3 +181,5 @@ Nueva en `scripts/mutations.py`: P-22 a P-25.
 ## 11. Cierre
 
 Criterio de salida (§5) cumplido: paridad con `models` sin recursos sin clasificar, y lo que `models` borra es error con ruta ([paridad](../evidence/2026-11-03-parity.md)); idempotencia, metamórficos y fuzz en verde en las tres versiones y benchmark contra `models` (mismo reporte); mutaciones todas detectadas ([`2026-11-03-0256-mutations.md`](../evidence/2026-11-03-0256-mutations.md)); `make check` y `make check-packages` en verde ([`2026-11-03-0321.md`](../evidence/2026-11-03-0321.md)). **004 cerrado, sin commit** (a la espera del usuario). Siguiente: plan 005 (proyección `_summary`/`_elements`, D1).
+
+**Enmienda del 05-11-2026 (code review o1 del 005, hallazgo 2; decisión del dueño).** Los arreglos `x`/`_x` de distinto largo ya no se rechazan: R5 json.html §2.1.6.4.2 dice «implementations SHALL infer null values in the suffix of the shorter array» y R4 y R4B callan, así que en las tres versiones el más corto se rellena con `null` hasta el largo del otro y la salida los lleva alineados. Las reglas de `null` siguen sobre el relleno (un `null` del valor sin `_x` en esa posición, o de `_x` sin valor, sigue siendo `KindNull` en la ruta del valor). Se eliminó `KindLengthMismatch`.

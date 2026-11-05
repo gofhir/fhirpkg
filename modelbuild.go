@@ -515,10 +515,11 @@ func cardinalityOf(e elementDoc) (lo, hi int32, err error) {
 	if e.Max == maxUnbounded {
 		return int32(*e.Min), Unbounded, nil
 	}
-	n, err := strconv.Atoi(e.Max)
-	if err != nil || n < 0 || n > 1<<30 {
+	n64, err := strconv.ParseInt(e.Max, 10, 32)
+	if err != nil || n64 < 0 || n64 > 1<<30 {
 		return 0, 0, fmt.Errorf("max %q is not a count or the unbounded mark", e.Max)
 	}
+	n := int(n64)
 	if *e.Min > n {
 		return 0, 0, fmt.Errorf("min %d is greater than max %d (eld-2)", *e.Min, n)
 	}

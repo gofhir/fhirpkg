@@ -1,0 +1,127 @@
+version: "2"
+run:
+  timeout: 5m
+  modules-download-mode: readonly
+linters:
+  enable:
+    - bodyclose
+    - copyloopvar
+    - dogsled
+    - dupl
+    - gochecknoinits
+    - goconst
+    - gocritic
+    - goprintffuncname
+    - gosec
+    - noctx
+    - nolintlint
+    - prealloc
+    - revive
+    - rowserrcheck
+    - staticcheck
+    - unconvert
+    - unparam
+    - whitespace
+  settings:
+    dupl:
+      threshold: 150
+    errcheck:
+      check-type-assertions: false
+      check-blank: true
+    gosec:
+      excludes:
+        # G115: las conversiones int a uint32/uint16 de normscan.go y normspec.go
+        # están acotadas por los límites de entrada (WithMaxBytes, WithMaxDepth).
+        - G115
+        # G306: el lock y el reporte son archivos que se versionan, no secretos.
+        - G306
+    goconst:
+      min-len: 5
+      min-occurrences: 4
+      # Count occurrences in the code under test only. Tests name FHIR types
+      # constantly — a fixture per type — and counting those reported literals
+      # that appear once in the engine and eight times across its table-driven
+      # tests, which is not repetition worth naming.
+      ignore-tests: true
+    gocritic:
+      disabled-checks:
+        - hugeParam
+        - rangeValCopy
+        # Las funciones con varios resultados del mismo tipo documentan cada
+        # uno en su comentario; nombrarlos no aporta.
+        - unnamedResult
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    govet:
+      disable:
+        - fieldalignment
+        # Sombrear err en un bloque interno es idiomático en Go.
+        - shadow
+      enable-all: true
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: error-return
+        - name: error-strings
+        - name: error-naming
+        - name: exported
+        - name: if-return
+        - name: increment-decrement
+        - name: var-naming
+        - name: var-declaration
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: time-naming
+        - name: unexported-return
+        - name: indent-error-flow
+        - name: errorf
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - dupl
+          - errcheck
+          - goconst
+          - gosec
+        path: _test\.go
+      # Estilo en los tests: preasignar, resultados sin usar y sugerencias de
+      # gocritic no justifican reescribir las pruebas.
+      - linters:
+          - gocritic
+          - prealloc
+          - unparam
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 10
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/gofhir
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

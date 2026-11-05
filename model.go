@@ -107,7 +107,7 @@ func (m *Model) FHIRTypeOf(path string) string { return m.fhirType[path] }
 // Cardinality son el min y el max del elemento; max es Unbounded si no tiene
 // tope. Un elemento con varios tipos responde tanto por su camino sin sufijo
 // como por cada variante. ok es false si el camino no tiene cardinalidad.
-func (m *Model) Cardinality(path string) (min, max int, ok bool) {
+func (m *Model) Cardinality(path string) (minCard, maxCard int, ok bool) {
 	c, ok := m.card[path]
 	return int(c.min), int(c.max), ok
 }

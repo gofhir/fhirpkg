@@ -55,7 +55,9 @@ func runGraph(args []string) error {
 	file := fs.String("candidates", "scripts/graph-candidates.txt", "candidate roots file")
 	registry := fs.String("registry", fhirpkg.DefaultRegistryURL, "registry URL, or a directory of name-version.tgz")
 	out := fs.String("o", "", "report file (default: standard output)")
-	_ = fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 	cands, err := readCandidates(*file)
 	if err != nil {
 		return err
@@ -70,9 +72,7 @@ func runGraph(args []string) error {
 	fmt.Fprintf(&b, "Each candidate is the set of roots a lock would start from. The graph is explored without applying the policy, and then judged with the plan 001 rules (one core per lock, D1: a core of another series that a dependency brings is excluded and a non-core package of another series needs an exception, D2: a package in two versions is an error).\n\n")
 	cache := map[string]*pkgData{}
 	for _, c := range cands {
-		if err := reportCandidate(ctx, &b, c, reg, cache); err != nil {
-			return fmt.Errorf("%s: %w", c.label, err)
-		}
+		reportCandidate(ctx, &b, c, reg, cache)
 	}
 	if *out == "" {
 		fmt.Print(b.String())
@@ -81,7 +81,7 @@ func runGraph(args []string) error {
 	return os.WriteFile(*out, []byte(b.String()), 0o644)
 }
 
-func reportCandidate(ctx context.Context, b *strings.Builder, c candidate, reg fhirpkg.Registry, cache map[string]*pkgData) error {
+func reportCandidate(ctx context.Context, b *strings.Builder, c candidate, reg fhirpkg.Registry, cache map[string]*pkgData) {
 	g, err := fhirpkg.Explore(ctx, c.roots, reg, func(id string, tgz []byte) error {
 		if cache[id] != nil {
 			return nil
@@ -97,7 +97,7 @@ func reportCandidate(ctx context.Context, b *strings.Builder, c candidate, reg f
 		// Un grafo que no se puede explorar (dependencia faltante) es un
 		// hallazgo del reporte, no un fallo del comando.
 		fmt.Fprintf(b, "## %s\n\nRoots: %s\n\nThe graph cannot be explored: %v\n\n", c.label, codeList(c.roots), err)
-		return nil
+		return
 	}
 	a := g.Analyze()
 	fmt.Fprintf(b, "## %s\n\nRoots: %s\n\n", c.label, codeList(g.Roots))
@@ -168,7 +168,7 @@ func reportCandidate(ctx context.Context, b *strings.Builder, c candidate, reg f
 	b.WriteString("\n### URL overlaps between packages\n\n")
 	if len(ov) == 0 {
 		b.WriteString("No two packages publish the same canonical URL.\n\n")
-		return nil
+		return
 	}
 	b.WriteString("Canonical URLs that two packages publish. \"Same version\" compares the `version` field; \"identical\" also compares the bytes. A version that is not semver (or is missing) cannot be ordered.\n\n")
 	b.WriteString("| Package A | Package B | Shared | Same version | of which identical | Different version (both semver) | Different version (not semver) | By resource type |\n|---|---|---|---|---|---|---|---|\n")
@@ -176,7 +176,6 @@ func reportCandidate(ctx context.Context, b *strings.Builder, c candidate, reg f
 		fmt.Fprintf(b, "| `%s` | `%s` | %d | %d | %d | %d | %d | %s |\n", p.A, p.B, p.Shared, p.SameVersion, p.Identical, p.DiffSemver, p.DiffNonSemver, typeCounts(p.ByType))
 	}
 	b.WriteString("\n")
-	return nil
 }
 
 func orRoot(from string) string {
@@ -212,7 +211,7 @@ func listOrNone(ids []string, g *fhirpkg.Graph) string {
 		if len(n.Via) > 0 {
 			via = strings.Join(n.Via, " -> ")
 		}
-		parts[i] = fmt.Sprintf("`%s` (declares %v; via %s)", id, n.Manifest.FHIRVersions, via)
+		parts[i] = fmt.Sprintf("%#q (declares %v; via %s)", id, n.Manifest.FHIRVersions, via)
 	}
 	return strings.Join(parts, "; ")
 }

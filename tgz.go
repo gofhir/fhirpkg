@@ -135,7 +135,7 @@ func scanTgz(data []byte, lim Limits, withResources bool) (*contents, error) {
 	}
 	// tar se detiene en los bloques de cierre sin leer el final del gzip: se
 	// drena para que se verifique su CRC y su largo (un gzip truncado es error).
-	if _, err := io.Copy(io.Discard, zr); err != nil {
+	if _, err := io.Copy(io.Discard, zr); err != nil { //nolint:gosec // G110: hallazgo abierto, el drenaje del final del gzip no tiene tope; ver el informe de lint de docs/plans/README.md
 		return nil, fmt.Errorf("invalid gzip stream: %w", err)
 	}
 	if manifest == nil {

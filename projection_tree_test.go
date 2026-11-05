@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"strings"
 )
 
 // Un árbol JSON que conserva el orden de las claves, para las propiedades de la
@@ -76,43 +75,6 @@ func parseValue(d *json.Decoder) (any, error) {
 		}
 	}
 	return tok, nil
-}
-
-func writeOrdered(v any) string {
-	var b strings.Builder
-	var rec func(v any)
-	rec = func(v any) {
-		switch x := v.(type) {
-		case jobj:
-			b.WriteByte('{')
-			for i, e := range x {
-				if i > 0 {
-					b.WriteByte(',')
-				}
-				k, _ := json.Marshal(e.k)
-				b.Write(k)
-				b.WriteByte(':')
-				rec(e.v)
-			}
-			b.WriteByte('}')
-		case []any:
-			b.WriteByte('[')
-			for i, e := range x {
-				if i > 0 {
-					b.WriteByte(',')
-				}
-				rec(e)
-			}
-			b.WriteByte(']')
-		case json.Number:
-			b.WriteString(x.String())
-		default:
-			s, _ := json.Marshal(x)
-			b.Write(s)
-		}
-	}
-	rec(v)
-	return b.String()
 }
 
 // isSubset dice si out se obtiene de in quitando elementos, con el mismo orden:

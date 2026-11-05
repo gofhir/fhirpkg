@@ -129,7 +129,7 @@ func Explore(ctx context.Context, roots []string, reg Registry, onPackage func(i
 		id := queue[0]
 		queue = queue[1:]
 		n := g.Nodes[id]
-		name, version, _ := splitID(id)
+		name, version, _ := strings.Cut(id, "#")
 		tgz, err := reg.Fetch(ctx, name, version)
 		if err != nil {
 			return nil, fmt.Errorf("%s (requested by %s): %w", id, orRoot(n.Requests[0].From), err)
@@ -265,7 +265,7 @@ func (g *Graph) Analyze() Analysis {
 	byName := map[string]map[string][]string{}
 	for _, id := range ids {
 		n := g.Nodes[id]
-		name, version, _ := splitID(id)
+		name, version, _ := strings.Cut(id, "#")
 		if byName[name] == nil {
 			byName[name] = map[string][]string{}
 		}

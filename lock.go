@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 )
 
 // LockSchema es la versión del formato de fhirpkg.lock.
@@ -162,7 +163,7 @@ func (l Lock) Validate() error {
 		}
 		depNames := make(map[string]bool, len(p.Dependencies))
 		for _, d := range p.Dependencies {
-			name, _, _ := splitID(d)
+			name, _, _ := strings.Cut(d, "#")
 			if depNames[name] {
 				return fmt.Errorf("invalid lock: package %s lists a dependency on %s twice", id, name)
 			}

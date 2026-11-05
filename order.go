@@ -151,7 +151,7 @@ func identifiers(s string, prerelease bool) bool {
 		}
 		for i := 0; i < len(id); i++ {
 			c := id[i]
-			if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '-') {
+			if (c < '0' || c > '9') && (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && c != '-' {
 				return false
 			}
 		}

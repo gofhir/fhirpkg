@@ -67,7 +67,9 @@ func runLock(args []string) error {
 	registry := fs.String("registry", fhirpkg.DefaultRegistryURL, "registry URL, or a directory of name-version.tgz")
 	var except listFlag
 	fs.Var(&except, "except", "name#version=reason: read this package although its FHIR series differs from the core's (repeatable)")
-	_ = fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 	opts := fhirpkg.Options{}
 	// Las excepciones del lock existente se conservan (están escritas a mano).
 	if old, err := fhirpkg.ReadLockFile(*out); err == nil {
@@ -105,7 +107,9 @@ func runVerify(args []string) error {
 	fs := flag.NewFlagSet("verify", flag.ExitOnError)
 	lockFile := fs.String("lock", "fhirpkg.lock", "lock file")
 	dir := fs.String("dir", ".cache/packages", "directory with the name-version.tgz files")
-	_ = fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 	lock, err := fhirpkg.ReadLockFile(*lockFile)
 	if err != nil {
 		return err
@@ -136,7 +140,9 @@ func runContext(args []string) error {
 	fs := flag.NewFlagSet("context", flag.ExitOnError)
 	lockFile := fs.String("lock", "fhirpkg.lock", "lock file")
 	dir := fs.String("dir", ".cache/packages", "directory with the name-version.tgz files")
-	_ = fs.Parse(args)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
 	lock, err := fhirpkg.ReadLockFile(*lockFile)
 	if err != nil {
 		return err

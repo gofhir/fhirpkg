@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 )
 
 // Package es un package leído de un lock.
@@ -100,7 +101,7 @@ func Open(lock Lock, dir string) (*Set, error) {
 // validaciones, pero conserva solo el manifiesto: no guarda recursos.
 func readLocked(dir string, lp LockedPackage, excluded bool) (*contents, error) {
 	id := lp.ID()
-	data, err := os.ReadFile(filepath.Join(dir, PackageFile(lp.Name, lp.Version)))
+	data, err := os.ReadFile(filepath.Join(dir, PackageFile(lp.Name, lp.Version))) //nolint:gosec // G703: dir lo elige quien llama; el nombre del archivo sale de un lock ya validado (Lock.Validate)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %s is missing from %s (restore the file)", id, PackageFile(lp.Name, lp.Version), dir)
 	}
@@ -112,7 +113,6 @@ func readLocked(dir string, lp LockedPackage, excluded bool) (*contents, error) 
 		return nil, fmt.Errorf("%s: SHA-256 is %s, the lock pins %s", id, got, lp.SHA256)
 	}
 	c, err := scanTgz(data, DefaultLimits, !excluded)
-	data = nil // el .tgz ya no hace falta: solo se conservan los recursos
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", id, err)
 	}
@@ -137,7 +137,7 @@ func matchLocked(m Manifest, lp LockedPackage) error {
 	// cada una del manifiesto aparece en el lock (Validate ya rechaza repetidas).
 	locked := make(map[string]bool, len(lp.Dependencies))
 	for _, d := range lp.Dependencies {
-		name, version, _ := splitID(d)
+		name, version, _ := strings.Cut(d, "#")
 		locked[name] = true
 		spec, ok := m.Dependencies[name]
 		if !ok {

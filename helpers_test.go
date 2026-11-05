@@ -22,7 +22,6 @@ type entry struct {
 	typeflag byte // 0 es un archivo regular
 	body     string
 	link     string
-	size     int64 // si no es 0, el tamaño que declara el encabezado
 }
 
 // buildTgz arma un .tgz con las entradas, en ese orden.

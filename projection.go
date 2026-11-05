@@ -156,7 +156,7 @@ func (c *Context) subsettedTag() ([]byte, error) {
 		enc.SetEscapeHTML(false)
 		str := func(s string) string {
 			b.Reset()
-			_ = enc.Encode(s)
+			_ = enc.Encode(s) //nolint:errcheck // codificar un string en un bytes.Buffer no puede fallar
 			return strings.TrimSuffix(b.String(), "\n")
 		}
 		out := `{"` + elemSystem + `":` + str(systemSubsetted) + `,"` + elemCode + `":` + str(codeSubsetted)

@@ -178,7 +178,7 @@ var (
 // el RSS máximo en bytes.
 func childRSS(t testing.TB, ver, example, impl string) int64 {
 	t.Helper()
-	cmd := exec.Command(os.Args[0], "-test.run=^TestBenchChild$")
+	cmd := exec.CommandContext(t.Context(), os.Args[0], "-test.run=^TestBenchChild$")
 	cmd.Env = append(os.Environ(), "PARITY_CHILD="+ver+"|"+example+"|"+impl)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("child %s %s %s: %v\n%s", ver, example, impl, err, out)
@@ -188,9 +188,9 @@ func childRSS(t testing.TB, ver, example, impl string) int64 {
 		return 0
 	}
 	if runtime.GOOS == "darwin" {
-		return int64(ru.Maxrss)
+		return ru.Maxrss
 	}
-	return int64(ru.Maxrss) << 10
+	return ru.Maxrss << 10
 }
 
 // TestBenchChild es el proceso hijo de la medición de RSS: carga el ejemplo, y

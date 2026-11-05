@@ -162,8 +162,6 @@ type hl7Verdict struct {
 	Errors []string `json:"errors"` // «severidad|código|ruta sin índices|texto», ordenados y sin repetir
 }
 
-var indexRe2 = regexp.MustCompile(`\[\d+\]`)
-
 func readVerdicts(t testing.TB, ver string) map[string]hl7Verdict {
 	t.Helper()
 	f, err := os.Open(filepath.Join("..", "testdata", "projection-hl7", ver+".jsonl"))

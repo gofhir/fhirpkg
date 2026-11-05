@@ -4,13 +4,16 @@ check: fmt vet test
 
 # Se corren con go run para que coincidan con CI sin instalar nada. Mantener las
 # versiones al día con GOLANGCI_VERSION y GOVULNCHECK_VERSION de
-# .github/workflows/ci.yml. Lint cubre el módulo de la raíz; parity/ es otro
-# módulo (ver docs/plans/README.md, hallazgos de lint).
+# .github/workflows/ci.yml. Lint cubre el módulo de la raíz y parity/, que es
+# otro módulo (como conformance/ en fhirpath) y necesita ../go-searchindex.
 GOLANGCI_VERSION := v2.15.0
 GOVULNCHECK_VERSION := v1.7.0
 
+GOLANGCI := go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION)
+
 lint:
-	go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(GOLANGCI_VERSION) run ./...
+	$(GOLANGCI) run ./...
+	cd parity && $(GOLANGCI) run ./...
 
 vuln:
 	go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...

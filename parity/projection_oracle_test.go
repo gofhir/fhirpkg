@@ -3,6 +3,7 @@ package parity
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -333,7 +334,7 @@ func oracleScript() string { return filepath.Join("..", "scripts", "projection_o
 func startOracle(t testing.TB, v *version) *oracleProc {
 	t.Helper()
 	report := filepath.Join(t.TempDir(), "rules-"+v.name+".tsv")
-	cmd := exec.Command("python3", "-I", "-u", oracleScript(), "--lock", filepath.Join("..", "testdata", v.lock),
+	cmd := exec.CommandContext(context.Background(), "python3", "-I", "-u", oracleScript(), "--lock", filepath.Join("..", "testdata", v.lock),
 		"--packages", packagesDir(t), "--report", report)
 	in, err := cmd.StdinPipe()
 	if err != nil {

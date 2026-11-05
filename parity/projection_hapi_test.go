@@ -21,8 +21,6 @@ import (
 
 const hapiMaxBytes = 200 << 10
 
-type hapiJob struct{ name, mode string }
-
 var hapiModes = []string{"true", "text", "data", "elements"}
 
 // TestWriteHAPIJobs escribe las entradas y jobs.tsv en HAPI_OUT/<versión>/.
@@ -106,7 +104,7 @@ func (cl *classifier) hapiWalk(scope string, isRes, root bool, ours, hapi jmap) 
 		ki, known := keys[k]
 		switch {
 		case !known:
-			cl.fail("%s.%s: HAPI keeps an unknown key", scope, k)
+			cl.failf("%s.%s: HAPI keeps an unknown key", scope, k)
 		case ki.under:
 			cl.mark("HAPI only: _x of a kept primitive")
 		default:
@@ -296,7 +294,7 @@ type classifier struct {
 
 func (cl *classifier) mark(class string) { cl.classes[class] = true }
 
-func (cl *classifier) fail(format string, args ...any) {
+func (cl *classifier) failf(format string, args ...any) {
 	cl.errs = append(cl.errs, fmt.Sprintf(format, args...))
 }
 

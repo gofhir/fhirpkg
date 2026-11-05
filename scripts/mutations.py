@@ -475,7 +475,7 @@ def parity_fast(dst, work, env):
     link = os.path.join(work, "go-searchindex")
     if not os.path.exists(link):
         os.symlink(os.path.join(os.path.dirname(R), "go-searchindex"), link)
-    penv = dict(env, PARITY_CORPUS="fast")
+    penv = dict(env, PARITY_CORPUS="fast", PARITY_ORACLES="2")
     start = time.time()
     try:
         out = subprocess.run(["go", "test", "-failfast", "-count=1", "-run", PARITY_RUN, "./..."],

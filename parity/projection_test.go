@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -107,46 +110,68 @@ func TestProjectionParity(t *testing.T) {
 	modes := map[string]*modePin{}
 	ran := map[string]bool{}
 	var reports []string
-	pin := func(src, ver, mode string) *modePin {
+	var pinMu sync.Mutex
+	pin := func(src, ver, mode string, f func(*modePin)) {
+		pinMu.Lock()
+		defer pinMu.Unlock()
 		k := src + "|" + ver + "|" + mode
 		if modes[k] == nil {
 			modes[k] = &modePin{Source: src, Version: ver, Mode: mode}
 		}
-		return modes[k]
+		f(modes[k])
 	}
+	nw := oracleWorkers()
 	for _, v := range loadVersions(t) {
 		core := loadRawCore(t, v)
-		o := startOracle(t, v)
+		pool := make([]*oracleProc, nw)
+		for i := range pool {
+			pool[i] = startOracle(t, v)
+		}
 		for _, src := range srcs {
 			start := time.Now()
 			h := sha256.New()
 			inputs := 0
+			run := newPoolRun(pool)
 			ok := src.each(t, v.name, func(name string, raw []byte) {
 				inputs++
 				fmt.Fprintf(h, "%s\x00%d\x00%x\n", name, len(raw), sha256.Sum256(raw))
 				if len(raw) > oracleMaxBytes {
-					p := pin(src.name, v.name, "true")
-					p.Skipped++
-					p.Reason = fmt.Sprintf("over %d MB", oracleMaxBytes>>20)
+					pin(src.name, v.name, "true", func(p *modePin) {
+						p.Skipped++
+						p.Reason = fmt.Sprintf("over %d MB", oracleMaxBytes>>20)
+					})
 					return
 				}
-				diffs = append(diffs, compareResource(t, v, core, o, src.name, name, raw, pin)...)
-				if fast && len(diffs) > 0 {
-					d := diffs[0]
-					t.Fatalf("%s %s %s [%s %v]: %s", d.Source, d.Version, d.Name, d.Mode, d.Elements, d.Detail)
+				if !run.submit(func(o *oracleProc) ([]parityDiff, error) {
+					return compareResource(v, core, o, src.name, name, raw, pin)
+				}) && fast {
+					return
 				}
 			})
+			ds, err := run.wait()
+			if err != nil {
+				t.Fatal(err)
+			}
+			diffs = append(diffs, ds...)
+			if fast && len(diffs) > 0 {
+				d := diffs[0]
+				t.Fatalf("%s %s %s [%s %v]: %s", d.Source, d.Version, d.Name, d.Mode, d.Elements, d.Detail)
+			}
 			if ok {
 				ran[src.name] = true
 				corpora = append(corpora, corpusPin{src.name, v.name, inputs, hex.EncodeToString(h.Sum(nil))})
-				t.Logf("%s %s: %d inputs in %s", src.name, v.name, inputs, time.Since(start).Round(time.Second))
+				t.Logf("%s %s: %d inputs in %s (%d oracle processes)", src.name, v.name, inputs, time.Since(start).Round(time.Second), nw)
 			}
 		}
-		rep, err := o.close()
-		if err != nil {
-			t.Fatal(err)
+		var reps []string
+		for _, o := range pool {
+			rep, err := o.close()
+			if err != nil {
+				t.Fatal(err)
+			}
+			reps = append(reps, rep)
 		}
-		reports = append(reports, fmt.Sprintf("### %s\n\n```\n%s```\n", v.name, rep))
+		reports = append(reports, fmt.Sprintf("### %s\n\n```\n%s```\n", v.name, mergeRuleReports(reps)))
 	}
 	writeRulesReport(t, reports)
 	if path := os.Getenv("PARITY_DIFFS"); path != "" {
@@ -160,6 +185,10 @@ func TestProjectionParity(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+	sort.SliceStable(diffs, func(i, j int) bool {
+		a, b := diffs[i], diffs[j]
+		return a.Version+"|"+a.Source+"|"+a.Name < b.Version+"|"+b.Source+"|"+b.Name
+	})
 	for i, d := range diffs {
 		if i >= 25 {
 			t.Errorf("... and %d more disagreements (PARITY_DIFFS=<file> writes them all)", len(diffs)-i)
@@ -248,7 +277,7 @@ func writeRulesReport(t *testing.T, reports []string) {
 
 // compareResource compara un recurso en todos los modos y devuelve sus
 // desacuerdos.
-func compareResource(t *testing.T, v *version, core rawCore, o *oracleProc, srcName, name string, raw []byte, pin func(src, ver, mode string) *modePin) []parityDiff {
+func compareResource(v *version, core rawCore, o *oracleProc, srcName, name string, raw []byte, pin func(src, ver, mode string, f func(*modePin))) ([]parityDiff, error) {
 	norm, nerr := v.ctx.Normalize(raw, fhirpkg.WithMaxBytes(1<<30))
 	var head struct {
 		ResourceType string `json:"resourceType"`
@@ -260,23 +289,25 @@ func compareResource(t *testing.T, v *version, core rawCore, o *oracleProc, srcN
 		// Regla 9: Project rechaza lo que Normalize rechaza, con los mismos errores.
 		p, err := mkProjection(v, rt, "true", nil)
 		if err != nil {
-			pin(srcName, v.name, "rejected").Skipped++
-			pin(srcName, v.name, "rejected").Reason = "rejected input without a projectable resourceType"
-			return nil
+			pin(srcName, v.name, "rejected", func(p *modePin) {
+				p.Skipped++
+				p.Reason = "rejected input without a projectable resourceType"
+			})
+			return nil, nil
 		}
-		pin(srcName, v.name, "rejected").Compared++
+		pin(srcName, v.name, "rejected", func(p *modePin) { p.Compared++ })
 		_, perr := v.ctx.Project(raw, p, fhirpkg.WithMaxBytes(1<<30))
 		if perr == nil || errSig(perr) != errSig(nerr) {
 			d := base
 			d.Mode, d.Input = "true", textOf(raw)
 			d.Detail = fmt.Sprintf("rule 9: Normalize rejects with %s and Project with %v", errSig(nerr), perr)
-			return []parityDiff{d}
+			return []parityDiff{d}, nil
 		}
-		return nil
+		return nil, nil
 	}
 	in, err := parseUnordered(norm)
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	rt, _ = in["resourceType"].(string)
 	type job struct {
@@ -310,13 +341,13 @@ func compareResource(t *testing.T, v *version, core rawCore, o *oracleProc, srcN
 		}
 	})
 	if err != nil {
-		t.Fatal(err)
+		return nil, err
 	}
 	var diffs []parityDiff
 	for i, j := range jobs {
 		d := base
 		d.Mode, d.Elements = j.mode, j.els
-		pin(srcName, v.name, j.mode).Compared++
+		pin(srcName, v.name, j.mode, func(p *modePin) { p.Compared++ })
 		switch {
 		case perrs[i] != nil:
 			d.Detail = fmt.Sprintf("Project fails on an input Normalize accepts: %v", perrs[i])
@@ -325,7 +356,7 @@ func compareResource(t *testing.T, v *version, core rawCore, o *oracleProc, srcN
 			// fallo del protocolo, no un desacuerdo (code review o3). La respuesta de
 			// error esperada solo existe para las entradas que Normalize rechaza (regla 9),
 			// que no pasan por aquí.
-			t.Fatalf("%s: the oracle cannot judge an input Normalize accepts: %s", oracleProtocolMarker, resps[i].Error)
+			return nil, fmt.Errorf("%s: the oracle cannot judge an input Normalize accepts (%s %s): %s", oracleProtocolMarker, srcName, name, resps[i].Error)
 		default:
 			if det := compareOutputs(outs[i], []byte(resps[i].Output)); det != "" {
 				d.Detail = det
@@ -338,7 +369,7 @@ func compareResource(t *testing.T, v *version, core rawCore, o *oracleProc, srcN
 			diffs = append(diffs, d)
 		}
 	}
-	return diffs
+	return diffs, nil
 }
 
 func textOf(b []byte) string {
@@ -388,4 +419,108 @@ func handSource() source {
 		}
 		return true
 	}}
+}
+
+// oracleWorkers es el número de procesos del oráculo por versión. El oráculo
+// (Python, un hilo) es el 94 % del costo de la paridad, así que la comparación
+// reparte los recursos entre varios procesos: uno por núcleo, hasta 4 (cada uno
+// carga los packages y retiene unos cientos de MB; ver plan 005 §18).
+// PARITY_ORACLES=<n> lo fija.
+func oracleWorkers() int {
+	if s := os.Getenv("PARITY_ORACLES"); s != "" {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			return n
+		}
+	}
+	return max(1, min(runtime.NumCPU(), 4))
+}
+
+// poolRun reparte trabajos entre los procesos de un grupo, con a lo sumo uno en
+// vuelo por proceso y uno esperando (la memoria de los recursos en curso queda
+// acotada). El primer error detiene la entrega; los desacuerdos se juntan.
+type poolRun struct {
+	ch    chan func(*oracleProc) ([]parityDiff, error)
+	wg    sync.WaitGroup
+	mu    sync.Mutex
+	diffs []parityDiff
+	err   error
+	stop  bool
+}
+
+func newPoolRun(pool []*oracleProc) *poolRun {
+	r := &poolRun{ch: make(chan func(*oracleProc) ([]parityDiff, error), len(pool))}
+	for _, o := range pool {
+		r.wg.Add(1)
+		go func(o *oracleProc) {
+			defer r.wg.Done()
+			for job := range r.ch {
+				r.mu.Lock()
+				stopped := r.stop
+				r.mu.Unlock()
+				if stopped {
+					continue
+				}
+				ds, err := job(o)
+				r.mu.Lock()
+				r.diffs = append(r.diffs, ds...)
+				if err != nil && r.err == nil {
+					r.err = err
+				}
+				r.stop = r.stop || err != nil
+				r.mu.Unlock()
+			}
+		}(o)
+	}
+	return r
+}
+
+// submit entrega un trabajo; false si ya se detuvo la corrida.
+func (r *poolRun) submit(job func(*oracleProc) ([]parityDiff, error)) bool {
+	r.mu.Lock()
+	stopped := r.stop
+	r.mu.Unlock()
+	if stopped {
+		return false
+	}
+	r.ch <- job
+	return true
+}
+
+func (r *poolRun) wait() ([]parityDiff, error) {
+	close(r.ch)
+	r.wg.Wait()
+	return r.diffs, r.err
+}
+
+// mergeRuleReports suma los informes de reglas (mode, rule, count) de los
+// procesos del oráculo de una versión.
+func mergeRuleReports(reps []string) string {
+	type k struct{ mode, rule string }
+	sum := map[k]int{}
+	for _, rep := range reps {
+		for i, line := range strings.Split(rep, "\n") {
+			f := strings.Split(line, "\t")
+			if i == 0 || len(f) != 3 {
+				continue
+			}
+			n, _ := strconv.Atoi(f[2])
+			sum[k{f[0], f[1]}] += n
+		}
+	}
+	keys := make([]k, 0, len(sum))
+	for key := range sum {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].mode != keys[j].mode {
+			return keys[i].mode < keys[j].mode
+		}
+		return keys[i].rule < keys[j].rule
+	})
+	var b strings.Builder
+	b.WriteString("mode\trule\tcount\n")
+	for _, key := range keys {
+		fmt.Fprintf(&b, "%s\t%s\t%d\n", key.mode, key.rule, sum[key])
+	}
+	return b.String()
 }

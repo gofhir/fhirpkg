@@ -79,31 +79,9 @@ type typeDef struct {
 // baseDefinition no resuelva a un tipo, que la herencia tenga un ciclo y
 // cualquier snapshot mal formado.
 func (c *Context) buildModel(keys []key, docs map[*cand]parsed) (*Model, error) {
-	defs := map[string]*typeDef{}
-	for _, k := range keys {
-		if k.rt != typeStructureDefinition {
-			continue
-		}
-		g := c.groups[k]
-		if g.dec.winner == nil {
-			for _, cd := range g.cands {
-				if d := docs[cd].sd; definesType(d) {
-					return nil, fmt.Errorf("%s: the definition of type %q is unresolved (%s): no type can be taken from it", k.url, d.Type, explainTrace(g.dec.trace))
-				}
-			}
-			continue
-		}
-		d := docs[g.dec.winner].sd
-		if !definesType(d) {
-			continue
-		}
-		if d.Type == "" {
-			return nil, fmt.Errorf("%s: %s: the definition of a type has no type", g.dec.winner.pkgID, k.url)
-		}
-		if prev, ok := defs[d.Type]; ok {
-			return nil, fmt.Errorf("type %q is defined by more than one structure definition (%s and %s)", d.Type, prev.url, k.url)
-		}
-		defs[d.Type] = &typeDef{url: k.url, cand: g.dec.winner, doc: d}
+	defs, err := c.collectTypeDefs(keys, docs)
+	if err != nil {
+		return nil, err
 	}
 
 	m := &Model{
@@ -143,18 +121,11 @@ func (c *Context) buildModel(keys []key, docs map[*cand]parsed) (*Model, error) 
 		}
 		m.types[name] = typeInfo{parent: d.parent, resource: d.doc.Kind == kindResource && !d.doc.Abstract, primitive: d.doc.Kind == kindPrimitive}
 	}
-	for _, name := range m.names {
-		chain := []string{name}
-		for t := m.types[name].parent; t != ""; t = m.types[t].parent {
-			if slices.Contains(chain, t) {
-				return nil, fmt.Errorf("inheritance cycle through type %s: %s", t, strings.Join(append(chain, t), " -> "))
-			}
-			chain = append(chain, t)
-		}
+	if err := checkTypeCycles(m); err != nil {
+		return nil, err
 	}
 
 	b := &modelBuilder{c: c, m: m, docs: docs, defs: defs, targets: map[string]string{}}
-	var err error
 	if b.system, err = c.systemTypes(keys, docs); err != nil {
 		return nil, err
 	}
@@ -164,6 +135,51 @@ func (c *Context) buildModel(keys []key, docs map[*cand]parsed) (*Model, error) 
 		}
 	}
 	return m, nil
+}
+
+// collectTypeDefs toma el StructureDefinition ganador de cada tipo, por nombre.
+func (c *Context) collectTypeDefs(keys []key, docs map[*cand]parsed) (map[string]*typeDef, error) {
+	defs := map[string]*typeDef{}
+	for _, k := range keys {
+		if k.rt != typeStructureDefinition {
+			continue
+		}
+		g := c.groups[k]
+		if g.dec.winner == nil {
+			for _, cd := range g.cands {
+				if d := docs[cd].sd; definesType(d) {
+					return nil, fmt.Errorf("%s: the definition of type %q is unresolved (%s): no type can be taken from it", k.url, d.Type, explainTrace(g.dec.trace))
+				}
+			}
+			continue
+		}
+		d := docs[g.dec.winner].sd
+		if !definesType(d) {
+			continue
+		}
+		if d.Type == "" {
+			return nil, fmt.Errorf("%s: %s: the definition of a type has no type", g.dec.winner.pkgID, k.url)
+		}
+		if prev, ok := defs[d.Type]; ok {
+			return nil, fmt.Errorf("type %q is defined by more than one structure definition (%s and %s)", d.Type, prev.url, k.url)
+		}
+		defs[d.Type] = &typeDef{url: k.url, cand: g.dec.winner, doc: d}
+	}
+	return defs, nil
+}
+
+// checkTypeCycles falla si la herencia de los tipos del modelo tiene un ciclo.
+func checkTypeCycles(m *Model) error {
+	for _, name := range m.names {
+		chain := []string{name}
+		for t := m.types[name].parent; t != ""; t = m.types[t].parent {
+			if slices.Contains(chain, t) {
+				return fmt.Errorf("inheritance cycle through type %s: %s", t, strings.Join(append(chain, t), " -> "))
+			}
+			chain = append(chain, t)
+		}
+	}
+	return nil
 }
 
 // systemTypes reúne los códigos de tipo del sistema de FHIRPath que el núcleo

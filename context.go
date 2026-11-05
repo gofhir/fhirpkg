@@ -238,29 +238,7 @@ func NewContext(set *Set) (*Context, error) {
 	}
 	c.visible = dependencyClosures(set, c.pkgs, c.pkgIndex)
 
-	// Agrupa por (tipo, url).
-	for i, p := range set.packages {
-		rs := set.resources[p.ID]
-		for k := range rs {
-			r := &rs[k]
-			g := c.groups[key{r.ResourceType, r.URL}]
-			if g == nil {
-				g = &group{}
-				c.groups[key{r.ResourceType, r.URL}] = g
-			}
-			g.cands = append(g.cands, &cand{pkg: i, pkgID: p.ID, res: r, copy: isCopy(canonicals[i], r.URL)})
-		}
-	}
-	keys := make([]key, 0, len(c.groups))
-	for k := range c.groups {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		if keys[i].rt != keys[j].rt {
-			return keys[i].rt < keys[j].rt
-		}
-		return keys[i].url < keys[j].url
-	})
+	keys := c.groupResources(set, canonicals)
 
 	docs := map[*cand]parsed{}
 	for _, k := range keys {
@@ -304,8 +282,42 @@ func NewContext(set *Set) (*Context, error) {
 	if c.model, err = c.buildModel(keys, docs); err != nil {
 		return nil, err
 	}
-	sort.Slice(c.conflicts, func(i, j int) bool {
-		a, b := c.conflicts[i], c.conflicts[j]
+	sortConflicts(c.conflicts)
+	return c, nil
+}
+
+// groupResources agrupa los recursos del Set por (tipo, url) y devuelve las
+// claves ordenadas por tipo y url.
+func (c *Context) groupResources(set *Set, canonicals []string) []key {
+	for i, p := range set.packages {
+		rs := set.resources[p.ID]
+		for k := range rs {
+			r := &rs[k]
+			g := c.groups[key{r.ResourceType, r.URL}]
+			if g == nil {
+				g = &group{}
+				c.groups[key{r.ResourceType, r.URL}] = g
+			}
+			g.cands = append(g.cands, &cand{pkg: i, pkgID: p.ID, res: r, copy: isCopy(canonicals[i], r.URL)})
+		}
+	}
+	keys := make([]key, 0, len(c.groups))
+	for k := range c.groups {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].rt != keys[j].rt {
+			return keys[i].rt < keys[j].rt
+		}
+		return keys[i].url < keys[j].url
+	})
+	return keys
+}
+
+// sortConflicts ordena los conflictos por clase, tipo y clave.
+func sortConflicts(cs []Conflict) {
+	sort.Slice(cs, func(i, j int) bool {
+		a, b := cs[i], cs[j]
 		if a.Kind != b.Kind {
 			return a.Kind < b.Kind
 		}
@@ -314,7 +326,6 @@ func NewContext(set *Set) (*Context, error) {
 		}
 		return a.Key < b.Key
 	})
-	return c, nil
 }
 
 // dependencyClosures calcula, para cada package, los packages que ve: él mismo

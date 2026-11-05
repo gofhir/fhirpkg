@@ -29,22 +29,31 @@ func (c Canonical) String() string {
 	return s
 }
 
+// checkCanonicalText rechaza el canónico vacío, con UTF-8 inválido o con
+// caracteres de control.
+func checkCanonicalText(s string) error {
+	if s == "" {
+		return errors.New("empty canonical")
+	}
+	if !utf8.ValidString(s) {
+		return errors.New("canonical is not valid UTF-8")
+	}
+	for _, r := range s {
+		if unicode.IsControl(r) {
+			return fmt.Errorf("canonical %q has a control character", s)
+		}
+	}
+	return nil
+}
+
 // ParseCanonical descompone url[|version][#fragmento]. Es estricto: un canónico
 // vacío, una versión o un fragmento vacíos, más de una versión o un fragmento,
 // espacios dentro de la url o del fragmento, espacios en los bordes de la
 // versión y caracteres de control son error. Un fragmento sin url ("#id") es
 // válido: Resolve decide qué hacer con él.
 func ParseCanonical(s string) (Canonical, error) {
-	if s == "" {
-		return Canonical{}, errors.New("empty canonical")
-	}
-	if !utf8.ValidString(s) {
-		return Canonical{}, errors.New("canonical is not valid UTF-8")
-	}
-	for _, r := range s {
-		if unicode.IsControl(r) {
-			return Canonical{}, fmt.Errorf("canonical %q has a control character", s)
-		}
+	if err := checkCanonicalText(s); err != nil {
+		return Canonical{}, err
 	}
 	rest, frag, hasFrag := strings.Cut(s, "#")
 	if hasFrag && (frag == "" || strings.Contains(frag, "#")) {

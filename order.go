@@ -146,20 +146,26 @@ func identifiers(s string, prerelease bool) bool {
 		return false
 	}
 	for _, id := range strings.Split(s, ".") {
-		if id == "" {
-			return false
-		}
-		for i := 0; i < len(id); i++ {
-			c := id[i]
-			if (c < '0' || c > '9') && (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && c != '-' {
-				return false
-			}
-		}
-		if prerelease && numeric(id) && len(id) > 1 && id[0] == '0' {
+		if !validIdentifier(id, prerelease) {
 			return false
 		}
 	}
 	return true
+}
+
+// validIdentifier valida un identificador ([0-9A-Za-z-]+); en un prerelease, uno
+// numérico no lleva ceros a la izquierda.
+func validIdentifier(id string, prerelease bool) bool {
+	if id == "" {
+		return false
+	}
+	for i := 0; i < len(id); i++ {
+		c := id[i]
+		if (c < '0' || c > '9') && (c < 'a' || c > 'z') && (c < 'A' || c > 'Z') && c != '-' {
+			return false
+		}
+	}
+	return !prerelease || !numeric(id) || len(id) <= 1 || id[0] != '0'
 }
 
 func numeric(s string) bool {
@@ -201,8 +207,14 @@ func cmpStrictSemver(a, b strictSemver) int {
 	case len(b.pre) == 0:
 		return -1
 	}
-	for i := 0; i < len(a.pre) && i < len(b.pre); i++ {
-		x, y := a.pre[i], b.pre[i]
+	return cmpPrerelease(a.pre, b.pre)
+}
+
+// cmpPrerelease compara los identificadores de dos prereleases no vacíos
+// (SemVer 2.0.0 §11.4): uno a uno y, si todos coinciden, gana el más largo.
+func cmpPrerelease(apre, bpre []string) int {
+	for i := 0; i < len(apre) && i < len(bpre); i++ {
+		x, y := apre[i], bpre[i]
 		xn, yn := numeric(x), numeric(y)
 		switch {
 		case xn && yn:
@@ -220,9 +232,9 @@ func cmpStrictSemver(a, b strictSemver) int {
 		}
 	}
 	switch {
-	case len(a.pre) < len(b.pre):
+	case len(apre) < len(bpre):
 		return -1
-	case len(a.pre) > len(b.pre):
+	case len(apre) > len(bpre):
 		return 1
 	}
 	return 0
@@ -279,21 +291,8 @@ func cmpInteger(a, b integerValue) int {
 // fhirDateKey valida una fecha FHIR (datatypes.html, date: YYYY, YYYY-MM o
 // YYYY-MM-DD) y devuelve su inicio como YYYY-MM-DD, que se ordena como texto.
 func fhirDateKey(s string) (string, bool) {
-	var y, m, d string
-	switch len(s) {
-	case 4:
-		y, m, d = s, "01", "01"
-	case 7:
-		if s[4] != '-' {
-			return "", false
-		}
-		y, m, d = s[:4], s[5:], "01"
-	case 10:
-		if s[4] != '-' || s[7] != '-' {
-			return "", false
-		}
-		y, m, d = s[:4], s[5:7], s[8:]
-	default:
+	y, m, d, ok := splitDate(s)
+	if !ok {
 		return "", false
 	}
 	if !numeric(y) || !numeric(m) || !numeric(d) || len(m) != 2 || len(d) != 2 || y == "0000" {
@@ -306,6 +305,28 @@ func fhirDateKey(s string) (string, bool) {
 		return "", false
 	}
 	return y + "-" + m + "-" + d, true
+}
+
+// splitDate separa YYYY, YYYY-MM o YYYY-MM-DD en año, mes y día (los ausentes
+// valen "01"), sin validar sus valores.
+func splitDate(s string) (y, m, d string, ok bool) {
+	switch len(s) {
+	case 4:
+		y, m, d = s, "01", "01"
+	case 7:
+		if s[4] != '-' {
+			return "", "", "", false
+		}
+		y, m, d = s[:4], s[5:], "01"
+	case 10:
+		if s[4] != '-' || s[7] != '-' {
+			return "", "", "", false
+		}
+		y, m, d = s[:4], s[5:7], s[8:]
+	default:
+		return "", "", "", false
+	}
+	return y, m, d, true
 }
 
 func daysIn(year, month int) int {

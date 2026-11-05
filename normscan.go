@@ -184,8 +184,33 @@ func (s *scanner) literal(word string, k nodeKind) uint32 {
 
 // number comprueba la gramática de un número JSON y avanza.
 func (s *scanner) number() bool {
-	d, p := s.data, s.pos
-	start := p
+	d, start := s.data, s.pos
+	p, msg := scanInt(d, start)
+	if msg == "" {
+		p, msg = scanFraction(d, p)
+	}
+	if msg == "" {
+		p, msg = scanExponent(d, p)
+	}
+	if msg != "" {
+		s.fail(KindSyntax, start, "%s", msg)
+		return false
+	}
+	s.pos = p
+	return true
+}
+
+// skipDigits devuelve la posición tras los dígitos que empiezan en p.
+func skipDigits(d []byte, p int) int {
+	for p < len(d) && d[p] >= '0' && d[p] <= '9' {
+		p++
+	}
+	return p
+}
+
+// scanInt lee el signo opcional y la parte entera (sin ceros a la izquierda).
+// Devuelve el motivo del error, vacío si está bien.
+func scanInt(d []byte, p int) (int, string) {
 	if p < len(d) && d[p] == '-' {
 		p++
 	}
@@ -193,40 +218,40 @@ func (s *scanner) number() bool {
 	case p < len(d) && d[p] == '0':
 		p++
 	case p < len(d) && d[p] >= '1' && d[p] <= '9':
-		for p < len(d) && d[p] >= '0' && d[p] <= '9' {
-			p++
-		}
+		p = skipDigits(d, p)
 	default:
-		s.fail(KindSyntax, start, "invalid number")
-		return false
+		return p, "invalid number"
 	}
+	return p, ""
+}
+
+// scanFraction lee la parte decimal opcional.
+func scanFraction(d []byte, p int) (int, string) {
 	if p < len(d) && d[p] == '.' {
 		p++
 		q := p
-		for p < len(d) && d[p] >= '0' && d[p] <= '9' {
-			p++
-		}
+		p = skipDigits(d, p)
 		if p == q {
-			s.fail(KindSyntax, start, "invalid number: no digits after the decimal point")
-			return false
+			return p, "invalid number: no digits after the decimal point"
 		}
 	}
+	return p, ""
+}
+
+// scanExponent lee el exponente opcional.
+func scanExponent(d []byte, p int) (int, string) {
 	if p < len(d) && (d[p] == 'e' || d[p] == 'E') {
 		p++
 		if p < len(d) && (d[p] == '+' || d[p] == '-') {
 			p++
 		}
 		q := p
-		for p < len(d) && d[p] >= '0' && d[p] <= '9' {
-			p++
-		}
+		p = skipDigits(d, p)
 		if p == q {
-			s.fail(KindSyntax, start, "invalid number: no digits in the exponent")
-			return false
+			return p, "invalid number: no digits in the exponent"
 		}
 	}
-	s.pos = p
-	return true
+	return p, ""
 }
 
 func isHex(c byte) bool {
@@ -259,6 +284,44 @@ func (s *scanner) u4(p int) (rune, bool) {
 	return r, true
 }
 
+// escape valida el escape que empieza en la barra de p y devuelve la posición
+// tras él. Falla ante un escape inválido o un surrogate sin par.
+func (s *scanner) escape(p int) (int, bool) {
+	d := s.data
+	if p+1 >= len(d) {
+		s.fail(KindSyntax, p, "string is not terminated")
+		return 0, false
+	}
+	switch d[p+1] {
+	case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
+		return p + 2, true
+	case 'u':
+		r, good := s.u4(p + 2)
+		if !good {
+			s.fail(KindSyntax, p, "invalid \\u escape")
+			return 0, false
+		}
+		p += 6
+		switch {
+		case r >= 0xD800 && r <= 0xDBFF:
+			if p+1 < len(d) && d[p] == '\\' && d[p+1] == 'u' {
+				if lo, good := s.u4(p + 2); good && lo >= 0xDC00 && lo <= 0xDFFF {
+					return p + 6, true
+				}
+			}
+			s.fail(KindSyntax, p-6, "high surrogate without its low surrogate")
+			return 0, false
+		case r >= 0xDC00 && r <= 0xDFFF:
+			s.fail(KindSyntax, p-6, "low surrogate without its high surrogate")
+			return 0, false
+		}
+	default:
+		s.fail(KindSyntax, p, "invalid escape \\%c", rune(d[p+1]))
+		return 0, false
+	}
+	return p, true
+}
+
 // str lee un string que empieza en la comilla de s.pos. Devuelve el rango del
 // contenido y si necesita reescribirse (una barra o un U+2028/9 posible). Falla
 // ante un control, un escape inválido, un surrogate sin par o UTF-8 inválido.
@@ -283,38 +346,11 @@ func (s *scanner) str() (cs, ce int, dirt, ok bool) {
 			return
 		case c == '\\':
 			dirt = true
-			if p+1 >= len(d) {
-				s.fail(KindSyntax, p, "string is not terminated")
+			np, good := s.escape(p)
+			if !good {
 				return
 			}
-			switch d[p+1] {
-			case '"', '\\', '/', 'b', 'f', 'n', 'r', 't':
-				p += 2
-			case 'u':
-				r, good := s.u4(p + 2)
-				if !good {
-					s.fail(KindSyntax, p, "invalid \\u escape")
-					return
-				}
-				p += 6
-				switch {
-				case r >= 0xD800 && r <= 0xDBFF:
-					if p+1 < len(d) && d[p] == '\\' && d[p+1] == 'u' {
-						if lo, good := s.u4(p + 2); good && lo >= 0xDC00 && lo <= 0xDFFF {
-							p += 6
-							continue
-						}
-					}
-					s.fail(KindSyntax, p-6, "high surrogate without its low surrogate")
-					return
-				case r >= 0xDC00 && r <= 0xDFFF:
-					s.fail(KindSyntax, p-6, "low surrogate without its high surrogate")
-					return
-				}
-			default:
-				s.fail(KindSyntax, p, "invalid escape \\%c", rune(d[p+1]))
-				return
-			}
+			p = np
 		case c < utf8.RuneSelf:
 			p++
 		default:

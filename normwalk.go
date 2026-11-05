@@ -109,6 +109,12 @@ func appendPathName(b []byte, name string) []byte {
 		return append(b, name...)
 	}
 	b = append(b, '`')
+	b = appendEscapedName(b, name)
+	return append(b, '`')
+}
+
+// appendEscapedName agrega name con los escapes de un identificador delimitado.
+func appendEscapedName(b []byte, name string) []byte {
 	for _, r := range name {
 		switch {
 		case r == '`' || r == '\\':
@@ -127,7 +133,7 @@ func appendPathName(b []byte, name string) []byte {
 			b = utf8.AppendRune(b, r)
 		}
 	}
-	return append(b, '`')
+	return b
 }
 
 // appendPropertyPath agrega la clave de un objeto JSON a una ruta, con la regla
@@ -175,20 +181,19 @@ func (w *walker) stringOf(n uint32) string {
 	return string(appendUnescaped(nil, w.data[nd.start+1:nd.end-1]))
 }
 
-// resource escribe el recurso del nodo n. slot es el tipo abstracto que acota
-// el discriminador, o "" si puede ser cualquier recurso (la raíz).
-func (w *walker) resource(n uint32, slot string) bool {
+// discriminator comprueba que el nodo n sea un objeto con un resourceType único
+// y de texto. Devuelve el nodo del discriminador y el del id (0 si no hay).
+func (w *walker) discriminator(n uint32) (dn, idn uint32, ok bool) {
 	nd := &w.nodes[n]
 	switch nd.kind {
 	case kObject:
 	case kNull:
 		w.report(KindNull, n, "", "a resource is expected, not null")
-		return false
+		return 0, 0, false
 	default:
 		w.report(KindWrongShape, n, "", "an object is expected for a resource")
-		return false
+		return 0, 0, false
 	}
-	var dn, idn uint32
 	count := 0
 	for c := nd.first; c != 0; c = w.nodes[c].next {
 		switch string(w.keyBytes(c)) {
@@ -204,12 +209,22 @@ func (w *walker) resource(n uint32, slot string) bool {
 	switch {
 	case count == 0:
 		w.report(KindMissingResourceType, n, "", "the discriminator is missing")
-		return false
+		return 0, 0, false
 	case count > 1:
 		w.report(KindDuplicateProperty, dn, propResourceType, "the discriminator is repeated")
-		return false
+		return 0, 0, false
 	case w.nodes[dn].kind != kString:
 		w.report(KindWrongShape, dn, propResourceType, "the discriminator must be a string")
+		return 0, 0, false
+	}
+	return dn, idn, true
+}
+
+// resource escribe el recurso del nodo n. slot es el tipo abstracto que acota
+// el discriminador, o "" si puede ser cualquier recurso (la raíz).
+func (w *walker) resource(n uint32, slot string) bool {
+	dn, idn, ok := w.discriminator(n)
+	if !ok {
 		return false
 	}
 	rt := w.stringOf(dn)

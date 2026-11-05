@@ -259,7 +259,7 @@ func (p *Projection) decide(m *Model, sp *objSpec, fs *fieldSpec, resLevel, root
 	path := sp.scope + "." + fs.name
 	switch p.mode {
 	case SummaryTrue:
-		if m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {
+		if summaryKeeps(m, path) {
 			if v := &fs.variants[0]; v.kind == vkObject && v.scope == typeExtension {
 				return actWhole // D1: una Extension conservada va entera
 			}
@@ -279,9 +279,7 @@ func (p *Projection) decide(m *Model, sp *objSpec, fs *fieldSpec, resLevel, root
 		if !root {
 			return actKeep
 		}
-		if p.names[fs.name] || p.mode == SummaryText && (fs.name == elemText || fs.name == elemID || fs.name == elemMeta) ||
-			p.mode == SummaryFalse && (fs.name == elemID || fs.name == elemMeta) ||
-			mandatory(m, path) || m.IsModifier(path) {
+		if p.keepsWhole(m, fs, path) {
 			return actWhole
 		}
 	}
@@ -289,6 +287,20 @@ func (p *Projection) decide(m *Model, sp *objSpec, fs *fieldSpec, resLevel, root
 		return actContained
 	}
 	return actDrop
+}
+
+// summaryKeeps dice si _summary=true conserva el elemento: es de resumen,
+// obligatorio o modificador.
+func summaryKeeps(m *Model, path string) bool {
+	return m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path)
+}
+
+// keepsWhole dice si _elements/_summary=text piden el elemento: lo nombran, es
+// uno de los que el modo conserva siempre, o es obligatorio o modificador.
+func (p *Projection) keepsWhole(m *Model, fs *fieldSpec, path string) bool {
+	return p.names[fs.name] || p.mode == SummaryText && (fs.name == elemText || fs.name == elemID || fs.name == elemMeta) ||
+		p.mode == SummaryFalse && (fs.name == elemID || fs.name == elemMeta) ||
+		mandatory(m, path) || m.IsModifier(path)
 }
 
 func mandatory(m *Model, path string) bool {
@@ -346,6 +358,31 @@ func (w *walker) resolveContained(fr *resFrame) {
 	if len(fr.cl) == 0 {
 		return
 	}
+	kept := containedClosure(fr)
+	ins := []byte(`,"` + elemContained + `":[`)
+	n := 0
+	for i, c := range fr.cl {
+		switch {
+		case !kept[i]:
+			fr.lost = true
+		default:
+			if n > 0 {
+				ins = append(ins, ',')
+			}
+			ins = append(ins, c.b...)
+			n++
+			fr.lost = fr.lost || c.lost
+		}
+	}
+	if n > 0 {
+		w.out = slices.Insert(w.out, fr.contPos, append(ins, ']')...)
+	}
+	fr.cl = nil
+}
+
+// containedClosure marca los contenidos que una referencia local conservada
+// nombra, directa o por otro contenido conservado.
+func containedClosure(fr *resFrame) []bool {
 	kept := make([]bool, len(fr.cl))
 	if fr.refs == nil {
 		fr.refs = map[string]bool{}
@@ -377,25 +414,7 @@ func (w *walker) resolveContained(fr *resFrame) {
 			}
 		}
 	}
-	ins := []byte(`,"` + elemContained + `":[`)
-	n := 0
-	for i, c := range fr.cl {
-		switch {
-		case !kept[i]:
-			fr.lost = true
-		default:
-			if n > 0 {
-				ins = append(ins, ',')
-			}
-			ins = append(ins, c.b...)
-			n++
-			fr.lost = fr.lost || c.lost
-		}
-	}
-	if n > 0 {
-		w.out = slices.Insert(w.out, fr.contPos, append(ins, ']')...)
-	}
-	fr.cl = nil
+	return kept
 }
 
 // finishFrame cierra un recurso: le pone el tag si perdió algo y avisa al
@@ -415,6 +434,29 @@ func (w *walker) finishFrame(fr *resFrame) {
 		}
 		par.lost = par.lost || fr.lost
 	}
+}
+
+// hasSubsettedTag informa si el arreglo meta.tag ya trae el tag SUBSETTED.
+func hasSubsettedTag(s *scanner, meta []byte, arr uint32) bool {
+	for c := s.nodes[arr].first; c != 0; c = s.nodes[c].next {
+		var sys, code string
+		for m := s.nodes[c].first; m != 0; m = s.nodes[m].next {
+			nd := &s.nodes[m]
+			if nd.kind != kString {
+				continue
+			}
+			switch string(meta[nd.key:nd.keyEnd]) {
+			case elemSystem:
+				sys = string(meta[nd.start+1 : nd.end-1])
+			case elemCode:
+				code = string(meta[nd.start+1 : nd.end-1])
+			}
+		}
+		if sys == systemSubsetted && code == codeSubsetted {
+			return true
+		}
+	}
+	return false
 }
 
 // addTag agrega el tag SUBSETTED al final de meta.tag del recurso, sin
@@ -446,23 +488,8 @@ func (w *walker) addTag(fr *resFrame) {
 	}
 	switch {
 	case arr != 0:
-		for c := s.nodes[arr].first; c != 0; c = s.nodes[c].next {
-			var sys, code string
-			for m := s.nodes[c].first; m != 0; m = s.nodes[m].next {
-				nd := &s.nodes[m]
-				if nd.kind != kString {
-					continue
-				}
-				switch string(meta[nd.key:nd.keyEnd]) {
-				case elemSystem:
-					sys = string(meta[nd.start+1 : nd.end-1])
-				case elemCode:
-					code = string(meta[nd.start+1 : nd.end-1])
-				}
-			}
-			if sys == systemSubsetted && code == codeSubsetted {
-				return
-			}
+		if hasSubsettedTag(&s, meta, arr) {
+			return
 		}
 		w.out = slices.Insert(w.out, fr.metaStart+int(s.nodes[arr].end)-1, append([]byte{','}, tag...)...)
 	case before >= 0:

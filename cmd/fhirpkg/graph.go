@@ -102,6 +102,30 @@ func reportCandidate(ctx context.Context, b *strings.Builder, c candidate, reg f
 	a := g.Analyze()
 	fmt.Fprintf(b, "## %s\n\nRoots: %s\n\n", c.label, codeList(g.Roots))
 
+	writePackagesTable(b, g, cache)
+	writeVerdict(b, g, a)
+	writeLockVerdict(b, g, a)
+
+	recs := map[string][]fhirpkg.URLRecord{}
+	for _, id := range g.IDs() {
+		recs[id] = cache[id].recs
+	}
+	ov := fhirpkg.Overlaps(recs)
+	b.WriteString("\n### URL overlaps between packages\n\n")
+	if len(ov) == 0 {
+		b.WriteString("No two packages publish the same canonical URL.\n\n")
+		return
+	}
+	b.WriteString("Canonical URLs that two packages publish. \"Same version\" compares the `version` field; \"identical\" also compares the bytes. A version that is not semver (or is missing) cannot be ordered.\n\n")
+	b.WriteString("| Package A | Package B | Shared | Same version | of which identical | Different version (both semver) | Different version (not semver) | By resource type |\n|---|---|---|---|---|---|---|---|\n")
+	for _, p := range ov {
+		fmt.Fprintf(b, "| `%s` | `%s` | %d | %d | %d | %d | %d | %s |\n", p.A, p.B, p.Shared, p.SameVersion, p.Identical, p.DiffSemver, p.DiffNonSemver, typeCounts(p.ByType))
+	}
+	b.WriteString("\n")
+}
+
+// writePackagesTable escribe la tabla de packages del grafo.
+func writePackagesTable(b *strings.Builder, g *fhirpkg.Graph, cache map[string]*pkgData) {
 	fmt.Fprintf(b, "### Packages\n\n| Package | Declares FHIR | Type | .tgz (MB) | Resources | Non-semver versions | Requested by |\n|---|---|---|---|---|---|---|\n")
 	for _, id := range g.IDs() {
 		n := g.Nodes[id]
@@ -112,13 +136,18 @@ func reportCandidate(ctx context.Context, b *strings.Builder, c candidate, reg f
 				declared += " (fhir-version-list)"
 			}
 		}
-		var by []string
+		by := make([]string, 0, len(n.Requests))
 		for _, r := range n.Requests {
 			by = append(by, orRoot(r.From))
 		}
 		d := cache[id]
 		fmt.Fprintf(b, "| `%s` | %s | %s | %.1f | %d | %d | %s |\n", id, declared, orNone(n.Manifest.Type), float64(n.Size)/(1<<20), d.stats.Resources, d.stats.NonSemver, strings.Join(by, ", "))
 	}
+}
+
+// writeVerdict escribe el juicio del análisis: núcleo, problemas, series ajenas,
+// versiones dobles y ciclo.
+func writeVerdict(b *strings.Builder, g *fhirpkg.Graph, a fhirpkg.Analysis) {
 	b.WriteString("\n### Verdict\n\n")
 	if a.Core != "" {
 		fmt.Fprintf(b, "- Core: `%s` (FHIR %s, series %s).\n", a.Core, a.FHIRVersion, a.Series)
@@ -143,11 +172,16 @@ func reportCandidate(ctx context.Context, b *strings.Builder, c candidate, reg f
 	if len(a.Cycle) > 0 {
 		fmt.Fprintf(b, "- Dependency cycle (error): %s.\n", strings.Join(a.Cycle, " -> "))
 	}
+}
+
+// writeLockVerdict escribe si el lock sale sin excepciones y, si no, con una
+// excepción por cada package de otra serie.
+func writeLockVerdict(b *strings.Builder, g *fhirpkg.Graph, a fhirpkg.Analysis) {
 	if _, err := g.Lock(fhirpkg.Options{}); err == nil {
 		b.WriteString("- Lock without exceptions: valid.\n")
 	} else {
 		fmt.Fprintf(b, "- Lock without exceptions: error: %s.\n", oneLine(err.Error()))
-		var exc []fhirpkg.Exception
+		exc := make([]fhirpkg.Exception, 0, len(a.Foreign))
 		for _, id := range a.Foreign {
 			exc = append(exc, fhirpkg.Exception{Package: id, Reason: "report"})
 		}
@@ -159,23 +193,6 @@ func reportCandidate(ctx context.Context, b *strings.Builder, c candidate, reg f
 			}
 		}
 	}
-
-	recs := map[string][]fhirpkg.URLRecord{}
-	for _, id := range g.IDs() {
-		recs[id] = cache[id].recs
-	}
-	ov := fhirpkg.Overlaps(recs)
-	b.WriteString("\n### URL overlaps between packages\n\n")
-	if len(ov) == 0 {
-		b.WriteString("No two packages publish the same canonical URL.\n\n")
-		return
-	}
-	b.WriteString("Canonical URLs that two packages publish. \"Same version\" compares the `version` field; \"identical\" also compares the bytes. A version that is not semver (or is missing) cannot be ordered.\n\n")
-	b.WriteString("| Package A | Package B | Shared | Same version | of which identical | Different version (both semver) | Different version (not semver) | By resource type |\n|---|---|---|---|---|---|---|---|\n")
-	for _, p := range ov {
-		fmt.Fprintf(b, "| `%s` | `%s` | %d | %d | %d | %d | %d | %s |\n", p.A, p.B, p.Shared, p.SameVersion, p.Identical, p.DiffSemver, p.DiffNonSemver, typeCounts(p.ByType))
-	}
-	b.WriteString("\n")
 }
 
 func orRoot(from string) string {

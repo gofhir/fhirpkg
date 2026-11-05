@@ -11,6 +11,7 @@ linters:
     - gochecknoinits
     - goconst
     - gocritic
+    - gocyclo
     - goprintffuncname
     - gosec
     - noctx
@@ -56,6 +57,8 @@ linters:
         - opinionated
         - performance
         - style
+    gocyclo:
+      min-complexity: 15
     govet:
       disable:
         - fieldalignment
@@ -95,6 +98,7 @@ linters:
           - dupl
           - errcheck
           - goconst
+          - gocyclo
           - gosec
         path: _test\.go
       # Estilo en los tests: preasignar, resultados sin usar y sugerencias de

@@ -69,8 +69,19 @@ func (c *Context) buildTypes(keys []key, docs map[*cand]parsed) error {
 	}
 	sort.Strings(c.types)
 	sort.Strings(c.concrete)
+	chains, err := inheritanceChains(c.types, parent)
+	if err != nil {
+		return err
+	}
+	c.chains = chains
+	return nil
+}
+
+// inheritanceChains arma, para cada tipo, su cadena de herencia (él mismo y sus
+// ancestros, del más cercano al más lejano). Un ciclo es error.
+func inheritanceChains(types []string, parent map[string]string) (map[string][]string, error) {
 	chains := map[string][]string{}
-	for _, name := range c.types {
+	for _, name := range types {
 		chain := []string{name}
 		for t := name; ; {
 			p, ok := parent[t]
@@ -78,15 +89,14 @@ func (c *Context) buildTypes(keys []key, docs map[*cand]parsed) error {
 				break
 			}
 			if slices.Contains(chain, p) {
-				return fmt.Errorf("inheritance cycle through resource type %s: %s", p, strings.Join(append(chain, p), " -> "))
+				return nil, fmt.Errorf("inheritance cycle through resource type %s: %s", p, strings.Join(append(chain, p), " -> "))
 			}
 			chain = append(chain, p)
 			t = p
 		}
 		chains[name] = chain
 	}
-	c.chains = chains
-	return nil
+	return chains, nil
 }
 
 func isResourceType(d *sdDoc) bool {
@@ -99,59 +109,15 @@ type baseCode struct{ base, code string }
 // §3.2) y arma la lista de cada tipo. Parte de un SearchParameter por URL (el
 // ganador de su canónico).
 func (c *Context) buildSearchParameters(keys []key, docs map[*cand]parsed) error {
-	byBC := map[baseCode][]*cand{}
-	// unresolvedBC son los candidatos de los SearchParameter cuyo canónico no se
-	// resolvió, por cada base:code que declaran (la unión de todos): ese
-	// base:code queda sin resolver, no se decide con otros SearchParameter.
-	unresolvedBC := map[baseCode][]*cand{}
-	disagree := map[baseCode]bool{}
-	for _, k := range keys {
-		if k.rt != typeSearchParameter {
-			continue
-		}
-		w := c.groups[k].dec.winner
-		if w == nil {
-			if err := collectUnresolved(k.url, c.groups[k].cands, docs, unresolvedBC, disagree); err != nil {
-				return err
-			}
-			continue
-		}
-		d := docs[w].sp
-		if len(d.Base) == 0 {
-			// Sin base no aplica a ningún tipo. hl7.fhir.r4.core y
-			// hl7.fhir.r4b.core traen 10 así (codesystem-extensions-*, draft): no es
-			// error, no se indexan.
-			continue
-		}
-		if d.Code == "" {
-			return fmt.Errorf("%s: %s: search parameter %s has no code", w.pkgID, w.res.File, k.url)
-		}
-		seen := map[string]bool{}
-		for _, b := range d.Base {
-			if !seen[b] {
-				seen[b] = true
-				byBC[baseCode{b, d.Code}] = append(byBC[baseCode{b, d.Code}], w)
-			}
-		}
+	idx := newBaseCodeIndex()
+	if err := c.collectBaseCodes(keys, docs, idx); err != nil {
+		return err
 	}
+	byBC, unresolvedBC, disagree := idx.byBC, idx.unresolvedBC, idx.disagree
 
 	resolved := map[baseCode]*cand{} // nil: sin resolver
 	codesOf := map[string][]string{} // base -> codes
-	bcs := make([]baseCode, 0, len(byBC)+len(unresolvedBC))
-	for bc := range byBC {
-		bcs = append(bcs, bc)
-	}
-	for bc := range unresolvedBC {
-		if _, ok := byBC[bc]; !ok {
-			bcs = append(bcs, bc)
-		}
-	}
-	sort.Slice(bcs, func(i, j int) bool {
-		if bcs[i].base != bcs[j].base {
-			return bcs[i].base < bcs[j].base
-		}
-		return bcs[i].code < bcs[j].code
-	})
+	bcs := sortedBaseCodes(byBC, unresolvedBC)
 	for _, bc := range bcs {
 		cs := slices.Clone(byBC[bc])
 		if blocked := unresolvedBC[bc]; len(blocked) > 0 {
@@ -197,6 +163,13 @@ func (c *Context) buildSearchParameters(keys []key, docs map[*cand]parsed) error
 		c.conflicts = append(c.conflicts, cf)
 	}
 
+	c.assembleSearchParameters(codesOf, resolved, docs)
+	return nil
+}
+
+// assembleSearchParameters arma la lista de cada tipo: sus base:code y los de sus
+// ancestros, sin repetir un code.
+func (c *Context) assembleSearchParameters(codesOf map[string][]string, resolved map[baseCode]*cand, docs map[*cand]parsed) {
 	c.spByType = make(map[string][]SearchParameter, len(c.types))
 	for _, t := range c.types {
 		var out []SearchParameter
@@ -220,7 +193,76 @@ func (c *Context) buildSearchParameters(keys []key, docs map[*cand]parsed) error
 		}
 		c.spByType[t] = out
 	}
+}
+
+// baseCodeIndex agrupa los candidatos de SearchParameter por base:code.
+type baseCodeIndex struct {
+	// byBC son los ganadores de cada canónico resuelto, por cada base:code.
+	byBC map[baseCode][]*cand
+	// unresolvedBC son los candidatos de los SearchParameter cuyo canónico no se
+	// resolvió, por cada base:code que declaran (la unión de todos): ese
+	// base:code queda sin resolver, no se decide con otros SearchParameter.
+	unresolvedBC map[baseCode][]*cand
+	disagree     map[baseCode]bool
+}
+
+func newBaseCodeIndex() *baseCodeIndex {
+	return &baseCodeIndex{byBC: map[baseCode][]*cand{}, unresolvedBC: map[baseCode][]*cand{}, disagree: map[baseCode]bool{}}
+}
+
+// collectBaseCodes recorre los SearchParameter y llena el índice por base:code.
+func (c *Context) collectBaseCodes(keys []key, docs map[*cand]parsed, idx *baseCodeIndex) error {
+	byBC, unresolvedBC, disagree := idx.byBC, idx.unresolvedBC, idx.disagree
+	for _, k := range keys {
+		if k.rt != typeSearchParameter {
+			continue
+		}
+		w := c.groups[k].dec.winner
+		if w == nil {
+			if err := collectUnresolved(k.url, c.groups[k].cands, docs, unresolvedBC, disagree); err != nil {
+				return err
+			}
+			continue
+		}
+		d := docs[w].sp
+		if len(d.Base) == 0 {
+			// Sin base no aplica a ningún tipo. hl7.fhir.r4.core y
+			// hl7.fhir.r4b.core traen 10 así (codesystem-extensions-*, draft): no es
+			// error, no se indexan.
+			continue
+		}
+		if d.Code == "" {
+			return fmt.Errorf("%s: %s: search parameter %s has no code", w.pkgID, w.res.File, k.url)
+		}
+		seen := map[string]bool{}
+		for _, b := range d.Base {
+			if !seen[b] {
+				seen[b] = true
+				byBC[baseCode{b, d.Code}] = append(byBC[baseCode{b, d.Code}], w)
+			}
+		}
+	}
 	return nil
+}
+
+// sortedBaseCodes lista los base:code de ambos mapas, ordenados por base y code.
+func sortedBaseCodes(byBC, unresolvedBC map[baseCode][]*cand) []baseCode {
+	bcs := make([]baseCode, 0, len(byBC)+len(unresolvedBC))
+	for bc := range byBC {
+		bcs = append(bcs, bc)
+	}
+	for bc := range unresolvedBC {
+		if _, ok := byBC[bc]; !ok {
+			bcs = append(bcs, bc)
+		}
+	}
+	sort.Slice(bcs, func(i, j int) bool {
+		if bcs[i].base != bcs[j].base {
+			return bcs[i].base < bcs[j].base
+		}
+		return bcs[i].code < bcs[j].code
+	})
+	return bcs
 }
 
 // decideBaseCode elige entre SearchParameter de URL distinta con el mismo

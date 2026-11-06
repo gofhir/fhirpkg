@@ -12,7 +12,7 @@
 # fija los workers (por defecto 3).
 #
 # Uso: python3 -I scripts/mutations.py [prefijo ...]   (p. ej. M01 M07)
-import concurrent.futures, datetime, hashlib, json, os, re, shutil, subprocess, sys, tempfile, time
+import concurrent.futures, datetime, hashlib, json, os, re, shutil, signal, subprocess, sys, tempfile, time
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(R, ".cache", "mutations.json")
@@ -469,6 +469,46 @@ def save_cache(entries):
     os.makedirs(os.path.dirname(CACHE), exist_ok=True)
     json.dump({"version": CACHE_VERSION, "entries": entries}, open(CACHE, "w"), indent=1, sort_keys=True)
 
+TIMEOUT = int(os.environ.get("MUTATION_TIMEOUT", "900"))
+GRACE = 120  # margen del arnés sobre el -timeout de go test
+
+def run_cmd(cmd, cwd, env, timeout=None):
+    """Como subprocess.run con salida capturada, pero en su propio grupo de procesos:
+    al vencer el plazo se mata todo el grupo (el binario de prueba incluido), para no
+    dejar procesos huérfanos que carguen la máquina y alarguen las demás mutaciones."""
+    p = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        out, err = p.communicate(timeout=timeout or TIMEOUT + GRACE)
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.communicate()
+        raise
+    return subprocess.CompletedProcess(cmd, p.returncode, out, err)
+
+def passed(cp):
+    """Positive evidence that go test ran and passed: exit 0 and an `ok` line."""
+    return cp.returncode == 0 and re.search(r"^ok\s", cp.stdout, re.M) is not None
+
+def no_verdict(cp):
+    # Sin un `ok` ni una prueba fallida con nombre (p. ej. el sistema mató a go test por
+    # falta de memoria y no dejó salida) no se sabe si la mutación se vio: nunca es `undetected`.
+    tail = (cp.stderr.strip().splitlines() or cp.stdout.strip().splitlines() or ["no output"])[-1]
+    return "go test exited %d without a verdict: %s" % (cp.returncode, tail[:120])
+
+def gotimeout():
+    # El plazo del propio go test (si no, vale 10 min y su pánico se confunde con un fallo).
+    return "-timeout=%ds" % TIMEOUT
+
+def go_timed_out(out):
+    # El pánico del plazo, o el SIGQUIT con que go test mata a un binario que no responde
+    # (p. ej. dormido en un init, antes de que arranque el cronómetro de las pruebas).
+    return "panic: test timed out" in out or "SIGQUIT: quit" in out
+
+def timed_out(secs):
+    # Un plazo vencido no dice nada de la mutación: una prueba correcta pero lenta (máquina
+    # cargada) también lo vence. Por eso no cuenta como detección: queda sin resolver.
+    return {"status": "timeout", "detail": "go test exceeded the %d s limit; the verdict is unknown (rerun with a longer MUTATION_TIMEOUT or less load)" % TIMEOUT, "secs": secs}
+
 def load_hints():
     # Los oráculos que detectaron cada mutación la última vez (último reporte y caché):
     # se corren primero, con -failfast; solo si ninguno falla corre todo.
@@ -501,17 +541,22 @@ def parity_fast(dst, work, env):
     penv = dict(env, PARITY_CORPUS="fast", PARITY_ORACLES="2")
     start = time.time()
     try:
-        out = subprocess.run(["go", "test", "-failfast", "-count=1", "-run", PARITY_RUN, "./..."],
-                             cwd=os.path.join(dst, "parity"), env=penv, capture_output=True, text=True, timeout=900).stdout
+        cp = run_cmd(["go", "test", gotimeout(), "-failfast", "-count=1", "-run", PARITY_RUN, "./..."],
+                     os.path.join(dst, "parity"), penv)
+        out = cp.stdout
     except subprocess.TimeoutExpired:
-        return ["timeout"], 900, None
+        return [], TIMEOUT, "timeout"
     secs = round(time.time() - start, 1)
+    if go_timed_out(out):
+        return [], secs, "timeout"
     if "[build failed]" in out:
         return [], secs, "parity does not compile: " + out.strip().splitlines()[0][:150]
     if "ORACLE-PROTOCOL-FAILURE" in out:
         m = re.search(r"ORACLE-PROTOCOL-FAILURE: ([^\n]{0,120})", out)
         return [], secs, "oracle protocol failure (not a detection): " + (m.group(1) if m else "")
     by = sorted(set(re.findall(r"^--- FAIL: (\S+)", out, re.M)))
+    if not by and not passed(cp):
+        return [], secs, no_verdict(cp)
     return by, secs, None
 
 def run_oracle_mutation(name, dst, work, env, pk):
@@ -522,11 +567,10 @@ def run_oracle_mutation(name, dst, work, env, pk):
     mutación, no una detección (code review o1, hallazgo 4)."""
     start = time.time()
     script = os.path.join("scripts", "projection_oracle.py")
-    pc = subprocess.run(["python3", "-I", "-m", "py_compile", script], cwd=dst, env=env, capture_output=True, text=True, timeout=300)
+    pc = run_cmd(["python3", "-I", "-m", "py_compile", script], dst, env, 300)
     if pc.returncode != 0:
         return {"status": "error", "detail": "the mutated oracle does not compile: " + (pc.stderr.strip().splitlines() or ["?"])[-1][:150]}
-    st = subprocess.run(["python3", "-I", script, "--self-test", "--packages", pk],
-                        cwd=dst, env=env, capture_output=True, text=True, timeout=900)
+    st = run_cmd(["python3", "-I", script, "--self-test", "--packages", pk], dst, env)
     secs = round(time.time() - start, 1)
     if st.returncode == 0:
         pass
@@ -536,6 +580,8 @@ def run_oracle_mutation(name, dst, work, env, pk):
         tail = (st.stderr.strip().splitlines() or st.stdout.strip().splitlines() or ["?"])[-1]
         return {"status": "error", "detail": "the mutated oracle failed without a self-test assertion: " + tail[:150]}
     pby, psecs, perr = parity_fast(dst, work, env)
+    if perr == "timeout":
+        return timed_out(round(secs + psecs, 1))
     if perr:
         return {"status": "error", "detail": perr}
     if pby:
@@ -544,6 +590,10 @@ def run_oracle_mutation(name, dst, work, env, pk):
 
 def harness_self_check(tmp_root):
     """Un oráculo roto de sintaxis debe dar status error, nunca detected."""
+    # Sin salida útil (go test muerto por el sistema, sin `ok`) no hay veredicto: nunca `undetected`.
+    cp = lambda rc, out: subprocess.CompletedProcess([], rc, out, "")
+    if passed(cp(-9, "")) or passed(cp(1, "ok  \tpkg\t1s\n")) or passed(cp(0, "?   \tpkg\t[no test files]\n")) or not passed(cp(0, "ok  \tpkg\t1s\n")):
+        sys.exit("harness self-check failed: the pass verdict needs exit 0 and an ok line")
     work = tempfile.mkdtemp(prefix="mut-check-", dir=tmp_root)
     try:
         r = run_mutation("O-selfcheck-syntax", [("scripts/projection_oracle.py", "import argparse", "import (")], tmp_root)
@@ -560,8 +610,26 @@ def harness_self_check(tmp_root):
             r = run_mutation("O-selfcheck-" + nm, [("scripts/projection_oracle.py", anchor, repl)], tmp_root)
             if r["status"] != "error":
                 sys.exit("harness self-check failed: an oracle with a %s reply was reported as %r" % (nm, r["status"]))
+        # Una mutación correcta pero lenta (solo duerme) vence el plazo: debe dar
+        # timeout, nunca detected (el plazo se acorta solo para esta comprobación).
+        global TIMEOUT, GRACE
+        saved, TIMEOUT, GRACE = (TIMEOUT, GRACE), 5, 3
+        try:
+            r = run_mutation("S-selfcheck-slow-but-correct", [("fhirnames.go", "package fhirpkg\n", "package fhirpkg\n\nimport \"time\"\n\nfunc init() { time.Sleep(time.Minute) }\n")], tmp_root)
+        finally:
+            TIMEOUT, GRACE = saved
+        if r["status"] != "timeout":
+            sys.exit("harness self-check failed: a slow but correct run was reported as %r" % r["status"])
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+def log_output(name, cp):
+    # MUTATION_LOG=<dir> guarda la salida completa de cada `go test` para diagnosticar.
+    d = os.environ.get("MUTATION_LOG")
+    if d:
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, name + ".log"), "w") as f:
+            f.write("exit %d\n--- stdout\n%s\n--- stderr\n%s\n" % (cp.returncode, cp.stdout, cp.stderr))
 
 def run_mutation(name, pairs, tmp_root):
     work = tempfile.mkdtemp(prefix="mut-", dir=tmp_root)
@@ -576,39 +644,50 @@ def run_mutation(name, pairs, tmp_root):
             open(p, "w").write(s.replace(old, new))
         pk = os.path.join(R, ".cache", "packages")
         env = dict(os.environ, FHIRPKG_PACKAGES=pk, EXAMPLES_PACKAGES=pk)
-        cmd, cwd = ["go", "test", "-vet=off", "-failfast", "-count=1", "./..."], dst
+        cmd, cwd = ["go", "test", gotimeout(), "-vet=off", "-failfast", "-count=1", "./..."], dst
         if name.startswith("P-"):
             # Solo los oráculos de parity/ (otro módulo, con replace a ../../go-searchindex).
             os.symlink(os.path.join(os.path.dirname(R), "go-searchindex"), os.path.join(work, "go-searchindex"))
-            cmd = ["go", "test", "-short", "-count=1", "-run", "TestParityWithModels|TestSearchIndexDifferential|TestFHIRPathAnalyzeDifferential|TestKnownLoss|TestNormalizerParity|TestPathNameAgreesWithTheLibrary|TestProjectionParity|TestComparisonRejects", "./..."]
+            cmd = ["go", "test", gotimeout(), "-short", "-count=1", "-run", "TestParityWithModels|TestSearchIndexDifferential|TestFHIRPathAnalyzeDifferential|TestKnownLoss|TestNormalizerParity|TestPathNameAgreesWithTheLibrary|TestProjectionParity|TestComparisonRejects", "./..."]
             cwd = os.path.join(dst, "parity")
         if name.startswith("O-"):
-            return run_oracle_mutation(name, dst, work, env, pk)
+            try:
+                return run_oracle_mutation(name, dst, work, env, pk)
+            except subprocess.TimeoutExpired:
+                return timed_out(TIMEOUT)
         start = time.time()
         hint = HINTS.get(name)
-        if hint and cmd[:4] == ["go", "test", "-vet=off", "-failfast"]:
+        if hint and name[:2] not in ("P-", "O-"):
             try:
-                hout = subprocess.run(["go", "test", "-vet=off", "-failfast", "-count=1", "-run", "^(" + "|".join(hint) + ")$", "./..."],
-                                      cwd=cwd, env=env, capture_output=True, text=True, timeout=900).stdout
+                hout = run_cmd(["go", "test", gotimeout(), "-vet=off", "-failfast", "-count=1", "-run", "^(" + "|".join(hint) + ")$", "./..."],
+                               cwd, env).stdout
             except subprocess.TimeoutExpired:
                 hout = ""
             hby = sorted(set(re.findall(r"^--- FAIL: (\S+)", hout, re.M)))
             if hby and not name.startswith("PR-"):
                 return {"status": "detected", "by": hby, "secs": round(time.time() - start, 1)}
         try:
-            out = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=900).stdout
+            cp = run_cmd(cmd, cwd, env)
+            out = cp.stdout
+            log_output(name, cp)
+            if go_timed_out(out):
+                return timed_out(round(time.time() - start, 1))
         except subprocess.TimeoutExpired:
-            return {"status": "detected", "detail": "timeout (the mutation hangs a test)", "by": ["timeout"], "secs": 900}
+            return timed_out(TIMEOUT)
         secs = round(time.time() - start, 1)
         if "[build failed]" in out or "\n# " in "\n" + out and "cannot" in out and "--- FAIL" not in out:
             return {"status": "error", "detail": "does not compile: " + out.strip().splitlines()[0][:150]}
         by = sorted(set(re.findall(r"^--- FAIL: (\S+)", out, re.M)))
+        if not by and not passed(cp):
+            return {"status": "error", "detail": no_verdict(cp)}
         if by and not (name.startswith("PR-") and os.environ.get("MUTATION_PARITY_ALSO") == "1"):
             return {"status": "detected", "by": by, "secs": secs}
         if name.startswith("PR-"):
             # Plan 005 §13.4: lo que no ve el módulo raíz (o todo, con MUTATION_PARITY_ALSO=1)
             # lo debe ver la comparación exacta con el oráculo, sobre el corpus rápido.
             pby, psecs, perr = parity_fast(dst, work, env)
+            if perr == "timeout":
+                return timed_out(round(secs + psecs, 1))
             if perr:
                 return {"status": "error", "detail": perr}
             if pby or by:
@@ -623,7 +702,10 @@ def run_mutation(name, pairs, tmp_root):
         shutil.rmtree(work, ignore_errors=True)
 
 def main():
-    tmp_root = os.environ.get("TMPDIR", tempfile.gettempdir())
+    # Las copias del repo se crean en MUTATION_TMPDIR, o en TMPDIR, o en el directorio
+    # temporal del sistema (/var/folders en macOS): `TMPDIR=/Volumes/dev/tmp make mutations`.
+    tmp_root = os.environ.get("MUTATION_TMPDIR") or os.environ.get("TMPDIR") or tempfile.gettempdir()
+    print("mutation copies under", tmp_root, flush=True)
     harness_self_check(tmp_root)
     if "--self-check" in sys.argv:
         print("harness self-check: ok")
@@ -670,9 +752,13 @@ def main():
             by = ", ".join(r.get("by", [])[:4]) + (" ..." if len(r.get("by", [])) > 4 else "")
             ps = ("; parity %s s%s" % (r["parity_secs"], "" if r.get("parity_sees", True) else ", parity does not see it")) if "parity_secs" in r else ""
             f.write("| %s | %s%s | %s | %s%s |\n" % (n, r["status"], " (cached)" if r.get("cached") else "", by or r.get("detail", ""), r.get("secs", ""), ps))
-        f.write("\n%s\n" % ("All mutations detected." if not bad else "**Not detected or invalid: %s**" % ", ".join(bad)))
+        counts = {}
+        for n in names:
+            counts[results[n]["status"]] = counts.get(results[n]["status"], 0) + 1
+        f.write("\nBy status: %s.\n" % ", ".join("%s %d" % (k, counts[k]) for k in sorted(counts)))
+        f.write("\n%s\n" % ("All mutations detected." if not bad else "**Unresolved (not detected, invalid or timed out): %s**" % ", ".join(bad)))
     print(path)
     if bad:
-        sys.exit("not detected or invalid: " + ", ".join(bad))
+        sys.exit("unresolved (not detected, invalid or timed out): " + ", ".join(bad))
 
 main()

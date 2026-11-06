@@ -115,6 +115,10 @@ evidence:
 # Mutaciones de los oráculos (carta §10): inyecta defectos en copias del repo y
 # exige que algún test los detecte. Escribe docs/evidence/<fecha>-mutations.md.
 # MUTATION_WORKERS (por defecto 3); MUTATION_FRESH=1 ignora la caché.
+# Las copias del repo van a MUTATION_TMPDIR o, si no, a TMPDIR (en macOS, por defecto,
+# /var/folders): `TMPDIR=/Volumes/dev/tmp make mutations`. MUTATION_TIMEOUT (900 s) es
+# el plazo de cada go test; un plazo vencido da el estado `timeout`, que no cuenta como
+# detección y hace fallar la corrida. MUTATION_LOG=<dir> guarda la salida de cada go test.
 .PHONY: mutations
 mutations:
 	scripts/fetch-packages.sh >/dev/null

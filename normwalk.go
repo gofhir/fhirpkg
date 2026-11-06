@@ -257,10 +257,11 @@ func (w *walker) resource(n uint32, slot string) bool {
 	return true
 }
 
-// object escribe el objeto n con las propiedades en el orden de sp. rt, si no
-// es "", es el discriminador que va primero. Devuelve cuántos elementos escribió
-// (sin contar el discriminador): con una proyección puede ser 0.
-func (w *walker) object(n uint32, sp *objSpec, rt string) int {
+// sortedMembers agrega a w.scratch los miembros del objeto n con su posición en
+// sp y los ordena: primero el discriminador, luego los elementos en el orden de
+// sp y al final los desconocidos por nombre. Devuelve los miembros y dónde
+// empiezan en w.scratch, para que quien llama los suelte.
+func (w *walker) sortedMembers(n uint32, sp *objSpec) ([]member, int) {
 	base := len(w.scratch)
 	for c := w.nodes[n].first; c != 0; c = w.nodes[c].next {
 		ref, ok := sp.keys[string(w.keyBytes(c))]
@@ -291,6 +292,29 @@ func (w *walker) object(n uint32, sp *objSpec, rt string) int {
 		}
 		return 1
 	})
+	return ms, base
+}
+
+// metaSetup prepara, para un recurso de una proyección, el marco y el índice del
+// elemento meta de sp (-1 si no hay), donde se anota el tag.
+func (w *walker) metaSetup(sp *objSpec, rt string) (*resFrame, int) {
+	var fr *resFrame
+	metaIdx := -1
+	if w.p != nil && rt != "" {
+		fr = w.fr
+		if k, ok := sp.keys[elemMeta]; ok && !k.under {
+			metaIdx = int(k.field)
+			fr.metaSpec = sp.fields[metaIdx].variants[0].scope
+		}
+	}
+	return fr, metaIdx
+}
+
+// object escribe el objeto n con las propiedades en el orden de sp. rt, si no
+// es "", es el discriminador que va primero. Devuelve cuántos elementos escribió
+// (sin contar el discriminador): con una proyección puede ser 0.
+func (w *walker) object(n uint32, sp *objSpec, rt string) int {
+	ms, base := w.sortedMembers(n, sp)
 	w.out = append(w.out, '{')
 	first := true
 	if rt != "" {
@@ -301,15 +325,7 @@ func (w *walker) object(n uint32, sp *objSpec, rt string) int {
 		w.out = append(w.out, '"')
 		first = false
 	}
-	var fr *resFrame
-	metaIdx := -1
-	if w.p != nil && rt != "" {
-		fr = w.fr
-		if k, ok := sp.keys[elemMeta]; ok && !k.under {
-			metaIdx = int(k.field)
-			fr.metaSpec = sp.fields[metaIdx].variants[0].scope
-		}
-	}
+	fr, metaIdx := w.metaSetup(sp, rt)
 	written := 0
 	for i := 0; i < len(ms) && !w.trunc; {
 		switch ms[i].sk {
@@ -323,20 +339,12 @@ func (w *walker) object(n uint32, sp *objSpec, rt string) int {
 			for j < len(ms) && ms[j].sk == ms[i].sk {
 				j++
 			}
-			f := int(ms[i].ref.field)
-			if fr != nil && fr.metaPos < 0 && metaIdx >= 0 && f > metaIdx {
-				fr.metaPos = len(w.out) // dónde va meta si no está: tras el último elemento anterior
-			}
-			mark := len(w.out)
-			if w.projField(sp, ms[i:j], &first, rt != "") {
-				written++
-				if fr != nil && f == metaIdx {
-					lead := 0
-					if w.out[mark] == ',' {
-						lead = 1
-					}
-					fr.metaStart, fr.metaEnd = mark+lead+len(elemMeta)+3, len(w.out)
+			if fr == nil {
+				if w.projField(sp, ms[i:j], &first, rt != "") {
+					written++
 				}
+			} else if w.objectGroup(sp, ms[i:j], &first, fr, metaIdx) {
+				written++
 			}
 			i = j
 		}
@@ -350,6 +358,27 @@ func (w *walker) object(n uint32, sp *objSpec, rt string) int {
 	w.out = append(w.out, '}')
 	w.scratch = w.scratch[:base]
 	return written
+}
+
+// objectGroup escribe las propiedades de un mismo elemento (el valor y sus
+// variantes) y anota dónde queda meta. Devuelve si escribió algo.
+func (w *walker) objectGroup(sp *objSpec, g []member, first *bool, fr *resFrame, metaIdx int) bool {
+	f := int(g[0].ref.field)
+	if fr.metaPos < 0 && metaIdx >= 0 && f > metaIdx {
+		fr.metaPos = len(w.out) // dónde va meta si no está: tras el último elemento anterior
+	}
+	mark := len(w.out)
+	if !w.projField(sp, g, first, true) {
+		return false
+	}
+	if f == metaIdx {
+		lead := 0
+		if w.out[mark] == ',' {
+			lead = 1
+		}
+		fr.metaStart, fr.metaEnd = mark+lead+len(elemMeta)+3, len(w.out)
+	}
+	return true
 }
 
 func (w *walker) sep(first *bool) {
@@ -381,7 +410,26 @@ func (w *walker) field(sp *objSpec, g []member, first *bool) bool {
 	v := &fs.variants[g[0].ref.variant]
 	w.push(v.key)
 	defer w.pop()
-	var xm, um uint32
+	xm, um := w.slots(g)
+	if um != 0 && v.kind != vkPrimitive {
+		w.report(KindNotPrimitive, um, "", "only a primitive element has the underscore form")
+		um = 0
+	}
+	if v.kind == vkPrimitive {
+		if w.p == nil {
+			return w.primitive(v, xm, um, first)
+		}
+		return w.projPrimitive(sp, fs, v, xm, um, first)
+	}
+	if xm != 0 {
+		return w.keyed(v, xm, "", first, w.p != nil && w.copy == 0 && w.dry == 0 && mandatory(w.m, sp.scope+"."+fs.name))
+	}
+	return false
+}
+
+// slots separa el nodo del valor (xm) y el de su `_x` (um) de un grupo de
+// miembros; una propiedad repetida se informa y no se baja a ninguno de los dos.
+func (w *walker) slots(g []member) (xm, um uint32) {
 	for _, x := range g {
 		slot := &xm
 		if x.ref.under {
@@ -400,28 +448,24 @@ func (w *walker) field(sp *objSpec, g []member, first *bool) bool {
 	if um == math.MaxUint32 {
 		um = 0
 	}
-	if um != 0 && v.kind != vkPrimitive {
-		w.report(KindNotPrimitive, um, "", "only a primitive element has the underscore form")
-		um = 0
+	return xm, um
+}
+
+// projPrimitive escribe un elemento primitivo de una proyección: anota la
+// referencia local y conserva entero el par `x`/`_x` de un primitivo obligatorio.
+func (w *walker) projPrimitive(sp *objSpec, fs *fieldSpec, v *variantSpec, xm, um uint32, first *bool) bool {
+	if xm != 0 && w.dry == 0 && (sp.scope == typeReference && v.key == elemReference || v.prim == typeCanonical) {
+		w.noteRef(xm)
 	}
-	if v.kind == vkPrimitive {
-		if xm != 0 && w.p != nil && w.dry == 0 && (sp.scope == typeReference && v.key == elemReference || v.prim == typeCanonical) {
-			w.noteRef(xm)
-		}
-		if um != 0 && w.p != nil && w.copy == 0 && mandatory(w.m, sp.scope+"."+fs.name) {
-			// D8 (ampliada el 04-11-2026): el par `x`/`_x` de un primitivo min>0
-			// se conserva entero: el elemento puede estar presente solo por su `_x`.
-			w.copy++
-			ok := w.primitive(v, xm, um, first)
-			w.copy--
-			return ok
-		}
-		return w.primitive(v, xm, um, first)
+	if um != 0 && w.copy == 0 && mandatory(w.m, sp.scope+"."+fs.name) {
+		// D8 (ampliada el 04-11-2026): el par `x`/`_x` de un primitivo min>0
+		// se conserva entero: el elemento puede estar presente solo por su `_x`.
+		w.copy++
+		ok := w.primitive(v, xm, um, first)
+		w.copy--
+		return ok
 	}
-	if xm != 0 {
-		return w.keyed(v, xm, "", first, w.p != nil && w.copy == 0 && w.dry == 0 && mandatory(w.m, sp.scope+"."+fs.name))
-	}
-	return false
+	return w.primitive(v, xm, um, first)
 }
 
 // keyed escribe `clave: valor`; si el valor queda vacío (una proyección quitó
@@ -592,19 +636,12 @@ func (w *walker) primitive(v *variantSpec, xm, um uint32, first *bool) bool {
 		}
 		return wrote
 	}
-	for _, p := range [2]*uint32{&xm, &um} {
-		if *p == 0 {
-			continue
-		}
-		switch nd := &w.nodes[*p]; {
-		case nd.kind != kArray:
-			w.report(KindWrongShape, *p, "", "the element repeats: an array is expected")
-			*p = 0
-		case nd.first == 0:
-			w.report(KindEmpty, *p, "", "an empty array is not allowed")
-			*p = 0
-		}
-	}
+	return w.primitiveArrays(v, xm, um, ext, first)
+}
+
+// primitiveArrays escribe `x` y `_x` de un primitivo que se repite.
+func (w *walker) primitiveArrays(v *variantSpec, xm, um uint32, ext *objSpec, first *bool) bool {
+	w.checkArrays(&xm, &um)
 	if xm == 0 && um == 0 {
 		return false
 	}
@@ -624,75 +661,110 @@ func (w *walker) primitive(v *variantSpec, xm, um uint32, first *bool) bool {
 	}
 	wrote := false
 	if xm != 0 {
-		w.sep(first)
 		wrote = true
-		w.writeKey("", v.key)
-		w.out = append(w.out, '[')
-		var p uint32
-		if um != 0 {
-			p = w.nodes[um].first
-		}
-		for c, i := w.nodes[xm].first, 0; c != 0 && !w.trunc; c, i = w.nodes[c].next, i+1 {
-			if i > 0 {
-				w.out = append(w.out, ',')
-			}
-			w.setIdx(i)
-			if w.nodes[c].kind == kNull {
-				if p == 0 || w.nodes[p].kind == kNull {
-					w.report(KindNull, c, "", "null needs a value in the underscore array at the same position")
-				} else {
-					w.out = append(w.out, "null"...)
-				}
-			} else {
-				w.scalar(c)
-			}
-			if p != 0 {
-				p = w.nodes[p].next
-			}
-		}
-		w.setIdx(-1)
-		if um != 0 {
-			// El valor más corto que su `_x`: el relleno es null y un `_x` null en esa
-			// posición queda sin ninguno de los dos.
-			c := w.nodes[um].first
-			for i := 0; c != 0 && i < nx; i++ {
-				c = w.nodes[c].next
-			}
-			for ; c != 0; c = w.nodes[c].next {
-				w.out = append(w.out, ",null"...) // el error de un `_x` null va con los de `_x`, en el mismo orden que primitiveFiltered
-			}
-		}
-		w.out = append(w.out, ']')
+		w.valueArray(v, xm, um, nx, first)
 	}
 	if um != 0 {
-		w.sep(first)
 		wrote = true
-		w.writeKey(primitiveExtPrefix, v.key)
-		w.out = append(w.out, '[')
-		for c, i := w.nodes[um].first, 0; c != 0 && !w.trunc; c, i = w.nodes[c].next, i+1 {
-			if i > 0 {
-				w.out = append(w.out, ',')
-			}
-			w.setIdx(i)
-			if w.nodes[c].kind == kNull {
-				if xm == 0 || i >= nx {
-					w.report(KindNull, c, "", "null needs a value in the value array at the same position")
-				} else {
-					w.out = append(w.out, "null"...)
-				}
-			} else {
-				w.objectValue(c, ext)
-			}
-		}
-		w.setIdx(-1)
-		if xm != 0 {
-			for i := nu; i < nx && !w.trunc; i++ {
-				w.out = append(w.out, ",null"...)
-			}
-		}
-		w.out = append(w.out, ']')
+		w.extArray(v, xm, um, nx, nu, ext, first)
 	}
 	return wrote
+}
+
+// checkArrays exige que el valor y su `_x` de un elemento que se repite sean
+// arreglos no vacíos; el que no lo es se informa y se descarta (queda en 0).
+func (w *walker) checkArrays(xm, um *uint32) {
+	for _, p := range [2]*uint32{xm, um} {
+		if *p == 0 {
+			continue
+		}
+		switch nd := &w.nodes[*p]; {
+		case nd.kind != kArray:
+			w.report(KindWrongShape, *p, "", "the element repeats: an array is expected")
+			*p = 0
+		case nd.first == 0:
+			w.report(KindEmpty, *p, "", "an empty array is not allowed")
+			*p = 0
+		}
+	}
+}
+
+// valueArray escribe el arreglo `x` de un primitivo que se repite.
+func (w *walker) valueArray(v *variantSpec, xm, um uint32, nx int, first *bool) {
+	w.sep(first)
+	w.writeKey("", v.key)
+	w.out = append(w.out, '[')
+	var p uint32
+	if um != 0 {
+		p = w.nodes[um].first
+	}
+	for c, i := w.nodes[xm].first, 0; c != 0 && !w.trunc; c, i = w.nodes[c].next, i+1 {
+		if i > 0 {
+			w.out = append(w.out, ',')
+		}
+		w.setIdx(i)
+		if w.nodes[c].kind == kNull {
+			if p == 0 || w.nodes[p].kind == kNull {
+				w.report(KindNull, c, "", "null needs a value in the underscore array at the same position")
+			} else {
+				w.out = append(w.out, "null"...)
+			}
+		} else {
+			w.scalar(c)
+		}
+		if p != 0 {
+			p = w.nodes[p].next
+		}
+	}
+	w.setIdx(-1)
+	if um != 0 {
+		// El valor más corto que su `_x`: el relleno es null y un `_x` null en esa
+		// posición queda sin ninguno de los dos.
+		c := w.nodes[um].first
+		for i := 0; c != 0 && i < nx; i++ {
+			c = w.nodes[c].next
+		}
+		for ; c != 0; c = w.nodes[c].next {
+			w.out = append(w.out, ",null"...) // el error de un `_x` null va con los de `_x`, en el mismo orden que primitiveFiltered
+		}
+	}
+	w.out = append(w.out, ']')
+}
+
+// extArray escribe el arreglo `_x` de un primitivo que se repite.
+func (w *walker) extArray(v *variantSpec, xm, um uint32, nx, nu int, ext *objSpec, first *bool) {
+	w.sep(first)
+	w.writeKey(primitiveExtPrefix, v.key)
+	w.out = append(w.out, '[')
+	for c, i := w.nodes[um].first, 0; c != 0 && !w.trunc; c, i = w.nodes[c].next, i+1 {
+		if i > 0 {
+			w.out = append(w.out, ',')
+		}
+		w.setIdx(i)
+		if w.nodes[c].kind == kNull {
+			if xm == 0 || i >= nx {
+				w.report(KindNull, c, "", "null needs a value in the value array at the same position")
+			} else {
+				w.out = append(w.out, "null"...)
+			}
+		} else {
+			w.objectValue(c, ext)
+		}
+	}
+	w.setIdx(-1)
+	if xm != 0 {
+		for i := nu; i < nx && !w.trunc; i++ {
+			w.out = append(w.out, ",null"...)
+		}
+	}
+	w.out = append(w.out, ']')
+}
+
+// filteredPos es una posición de los arreglos `x` y `_x` de primitiveFiltered.
+type filteredPos struct {
+	x    []byte // el valor escrito; nil si es null
+	null bool
+	ext  []byte // el `_x[i]` filtrado; nil si quedó vacío o era null
 }
 
 // primitiveFiltered es primitive para un arreglo con `_x` cuando la proyección
@@ -701,65 +773,17 @@ func (w *walker) primitive(v *variantSpec, xm, um uint32, first *bool) bool {
 // sobrevive, el arreglo `_x` desaparece. Valida en el mismo orden que primitive
 // (primero los valores, luego los `_x`), para dar los mismos errores.
 func (w *walker) primitiveFiltered(v *variantSpec, xm, um uint32, nx, nu int, ext *objSpec, first *bool) bool {
-	type pos struct {
-		x    []byte // el valor escrito; nil si es null
-		null bool
-		ext  []byte // el `_x[i]` filtrado; nil si quedó vacío o era null
-	}
-	ps := make([]pos, max(nx, nu))
+	ps := make([]filteredPos, max(nx, nu))
 	if xm != 0 {
-		p := w.nodes[um].first
-		for c, i := w.nodes[xm].first, 0; c != 0 && !w.trunc; c, i = w.nodes[c].next, i+1 {
-			w.setIdx(i)
-			if w.nodes[c].kind == kNull {
-				if p == 0 || w.nodes[p].kind == kNull {
-					w.report(KindNull, c, "", "null needs a value in the underscore array at the same position")
-				}
-				ps[i].null = true
-			} else {
-				mark := len(w.out)
-				w.scalar(c)
-				ps[i].x = slices.Clone(w.out[mark:])
-				w.out = w.out[:mark]
-			}
-			if p != 0 {
-				p = w.nodes[p].next
-			}
-		}
+		w.filterValues(ps, xm, um)
 	}
 	for i := nx; xm != 0 && i < len(ps); i++ {
 		ps[i].null = true // el sufijo inferido del valor más corto
 	}
-	keptExt := 0
-	for c, i := w.nodes[um].first, 0; c != 0 && !w.trunc; c, i = w.nodes[c].next, i+1 {
-		w.setIdx(i)
-		if w.nodes[c].kind == kNull {
-			if xm == 0 || i >= nx {
-				w.report(KindNull, c, "", "null needs a value in the value array at the same position")
-			}
-			continue
-		}
-		mark := len(w.out)
-		if w.objectValue(c, ext) {
-			ps[i].ext = slices.Clone(w.out[mark:])
-			keptExt++
-		} else {
-			w.loss()
-		}
-		w.out = w.out[:mark]
-	}
-	w.setIdx(-1)
+	keptExt := w.filterExts(ps, xm, um, nx, ext)
 	// Una posición sin valor y sin `_x` desaparece de los dos arreglos.
 	if xm != 0 {
-		kept := ps[:0]
-		for _, p := range ps {
-			if p.null && p.ext == nil {
-				w.loss()
-				continue
-			}
-			kept = append(kept, p)
-		}
-		ps = kept
+		ps = w.dropEmpty(ps)
 	}
 	wrote := false
 	if xm != 0 && len(ps) > 0 {
@@ -797,6 +821,67 @@ func (w *walker) primitiveFiltered(v *variantSpec, xm, um uint32, nx, nu int, ex
 		w.out = append(w.out, ']')
 	}
 	return wrote
+}
+
+// filterValues escribe cada valor de `x` aparte y lo deja en ps.
+func (w *walker) filterValues(ps []filteredPos, xm, um uint32) {
+	p := w.nodes[um].first
+	for c, i := w.nodes[xm].first, 0; c != 0 && !w.trunc; c, i = w.nodes[c].next, i+1 {
+		w.setIdx(i)
+		if w.nodes[c].kind == kNull {
+			if p == 0 || w.nodes[p].kind == kNull {
+				w.report(KindNull, c, "", "null needs a value in the underscore array at the same position")
+			}
+			ps[i].null = true
+		} else {
+			mark := len(w.out)
+			w.scalar(c)
+			ps[i].x = slices.Clone(w.out[mark:])
+			w.out = w.out[:mark]
+		}
+		if p != 0 {
+			p = w.nodes[p].next
+		}
+	}
+}
+
+// filterExts pasa cada `_x[i]` por la regla de Element, lo deja en ps y devuelve
+// cuántos sobreviven.
+func (w *walker) filterExts(ps []filteredPos, xm, um uint32, nx int, ext *objSpec) int {
+	keptExt := 0
+	for c, i := w.nodes[um].first, 0; c != 0 && !w.trunc; c, i = w.nodes[c].next, i+1 {
+		w.setIdx(i)
+		if w.nodes[c].kind == kNull {
+			if xm == 0 || i >= nx {
+				w.report(KindNull, c, "", "null needs a value in the value array at the same position")
+			}
+			continue
+		}
+		mark := len(w.out)
+		if w.objectValue(c, ext) {
+			ps[i].ext = slices.Clone(w.out[mark:])
+			keptExt++
+		} else {
+			w.loss()
+		}
+		w.out = w.out[:mark]
+	}
+	w.setIdx(-1)
+	return keptExt
+}
+
+// dropEmpty quita las posiciones sin valor y sin `_x`, y cuenta cada una como
+// una pérdida.
+func (w *walker) dropEmpty(ps []filteredPos) []filteredPos {
+	kept := ps[:0]
+	for _, p := range ps {
+		if p.null && p.ext == nil {
+			w.loss()
+			continue
+		}
+		kept = append(kept, p)
+	}
+	return kept
 }
 
 func (w *walker) count(arr uint32) int {

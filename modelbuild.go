@@ -251,242 +251,301 @@ func (b *modelBuilder) targetType(profile string) (string, error) {
 
 // addElements recorre el snapshot de un tipo y llena las tablas del modelo.
 func (b *modelBuilder) addElements(d *typeDef) error {
-	m := b.m
 	var doc snapshotDoc
 	if err := json.Unmarshal(d.cand.res.Raw, &doc); err != nil {
 		return fmt.Errorf("%s: %s: %w", d.cand.pkgID, d.cand.res.File, err)
 	}
 	typeName := d.doc.Type
-	where := d.cand.pkgID + ": " + d.url + " (" + typeName + ")"
+	p := &snapshotPass{
+		b: b, d: d, typeName: typeName,
+		where:   d.cand.pkgID + ": " + d.url + " (" + typeName + ")",
+		seen:    map[string]bool{},
+		crs:     map[string]bool{},   // caminos con contentReference
+		claimed: map[string]string{}, // camino indexado -> elemento que lo reclama
+		ids:     map[string]bool{},   // los id vistos, rebanadas incluidas
+	}
+	elements := doc.Snapshot.Element
 
 	// Primera pasada: los caminos del snapshot, sin rebanadas. Todo lo que
 	// apunta a otro elemento (contentReference, padre, variante de [x]) se
 	// comprueba contra este conjunto, sea cual sea el orden de los elementos.
-	seen := map[string]bool{}
-	crs := map[string]bool{}       // caminos con contentReference
-	claimed := map[string]string{} // camino indexado -> elemento que lo reclama
-	ids := map[string]bool{}       // los id vistos, rebanadas incluidas
-	for _, e := range doc.Snapshot.Element {
-		// sdf-14: «All element definitions must have an id». El id es lo que
-		// distingue una rebanada (path:nombre); sin él no se sabe si lo es.
-		if e.ID == "" {
-			return fmt.Errorf("%s: the element %q has no id (sdf-14)", where, e.Path)
+	for _, e := range elements {
+		if err := p.notePath(e); err != nil {
+			return err
 		}
-		// El path nombra el elemento (elementdefinition.html: «a "."-separated
-		// list of ancestor elements»); el nombre de una rebanada va en el id y en
-		// sliceName. eld-19 admite sintácticamente «:nombre» en un componente,
-		// pero ningún núcleo lo usa en un path y el modelo indexa por path: una
-		// marca de rebanada en él rompe que ninguna clave la lleve.
-		if strings.Contains(e.Path, ":") {
-			return fmt.Errorf("%s: the path %q has a slice mark: the slice name belongs in the id", where, e.Path)
-		}
-		// elementdefinition.html, «id» (Element ids): el id de un elemento es su path
-		// con el nombre de cada rebanada tras «:». Un id que no corresponde al path
-		// no dice qué elemento es ni si es una rebanada.
-		if stripSliceNames(e.ID) != e.Path {
-			return fmt.Errorf("%s: the element %q: the id %q does not match the path", where, e.Path, e.ID)
-		}
-		if isSlice(e) {
-			// Una rebanada restringe un elemento ya visto: la raíz de una rebanada
-			// (id que termina en :nombre), el elemento sin el nombre; un
-			// descendiente, la rebanada de la que cuelga.
-			if !ids[sliceParentID(e.ID)] {
-				return fmt.Errorf("%s: the slice %q has no base element %q before it", where, e.ID, sliceParentID(e.ID))
-			}
-			ids[e.ID] = true
-			continue
-		}
-		ids[e.ID] = true
-		if e.ContentReference != "" {
-			crs[e.Path] = true
-		}
-		top, _, _ := strings.Cut(e.Path, ".")
-		if top != typeName {
-			return fmt.Errorf("%s: the path %q is not under the type", where, e.Path)
-		}
-		if seen[e.Path] {
-			return fmt.Errorf("%s: the path %q is listed twice", where, e.Path)
-		}
-		seen[e.Path] = true
 	}
-	if !seen[typeName] {
-		return fmt.Errorf("%s: the snapshot has no root element", where)
+	if !p.seen[typeName] {
+		return fmt.Errorf("%s: the snapshot has no root element", p.where)
 	}
 	// elementdefinition.html, contentReference: el contenido del elemento es el
 	// del destino. Con hijos propios en el snapshot el modelo sería ambiguo
 	// (ResolvePath iría al destino y ChildElements a los hijos), y un
 	// contentReference a un hijo de otro eludiría la regla de las cadenas.
-	for _, e := range doc.Snapshot.Element {
+	for _, e := range elements {
 		i := strings.LastIndex(e.Path, ".")
-		if i >= 0 && crs[e.Path[:i]] {
-			return fmt.Errorf("%s: %q: the element %q has a content reference and children", where, e.Path, e.Path[:i])
+		if i >= 0 && p.crs[e.Path[:i]] {
+			return fmt.Errorf("%s: %q: the element %q has a content reference and children", p.where, e.Path, e.Path[:i])
 		}
 	}
 
-	for _, e := range doc.Snapshot.Element {
-		// sdf-3 y eld-2 valen para todo elemento del snapshot, rebanadas incluidas.
-		lo, hi, err := cardinalityOf(e)
-		if err != nil {
-			return fmt.Errorf("%s: %q: %w", where, e.Path, err)
-		}
-		if isSlice(e) {
-			continue
-		}
-		i := strings.LastIndex(e.Path, ".")
-		if i < 0 {
-			continue // la raíz del tipo
-		}
-		parent, name := e.Path[:i], e.Path[i+1:]
-		m.children[parent] = append(m.children[parent], name)
-
-		if !seen[parent] {
-			return fmt.Errorf("%s: %q has no parent element %q in the snapshot", where, e.Path, parent)
-		}
-		// Cada camino que el modelo indexa (el del elemento, la base de un [x] y
-		// cada variante) lo reclama un solo elemento del snapshot: otro con el
-		// mismo nombre pisaría su cardinalidad, su tipo y sus destinos
-		// (elementdefinition.html, «Choice types»).
-		add := func(path string) error {
-			if from, dup := claimed[path]; dup {
-				return fmt.Errorf("%s: %q: the path %q collides with the one of %q", where, e.Path, path, from)
-			}
-			claimed[path] = e.Path
-			m.card[path] = cardinality{lo, hi}
-			if e.IsSummary {
-				m.summary[path] = true
-			}
-			if e.IsModifier {
-				m.modifier[path] = true
-			}
-			return nil
-		}
-		if e.ContentReference != "" {
-			// eld-5: «if the element definition has a contentReference, it cannot
-			// have type ...».
-			if len(e.Type) > 0 {
-				return fmt.Errorf("%s: %q: the element has a content reference and a type (eld-5)", where, e.Path)
-			}
-			from, to, ok := strings.Cut(e.ContentReference, "#")
-			if !ok || to == "" {
-				return fmt.Errorf("%s: %q: the content reference %q has no fragment", where, e.Path, e.ContentReference)
-			}
-			// elementdefinition.html: el destino es «an element defined elsewhere
-			// in the definition»: la url, si la hay, es la de este mismo
-			// StructureDefinition (R5 admite url#ruta).
-			if from != "" {
-				if u, _, _ := strings.Cut(from, "|"); u != d.url {
-					return fmt.Errorf("%s: %q: the content reference %q names another definition (%s)", where, e.Path, e.ContentReference, u)
-				}
-			}
-			if !seen[to] {
-				return fmt.Errorf("%s: %q: the content reference %q is not an element of this definition", where, e.Path, e.ContentReference)
-			}
-			// elementdefinition.html: el destino aporta «all the rules that are in
-			// the ElementDefinition for the element» (y siempre «the non-constrained
-			// definition»): si fuera a su vez un contentReference, no aportaría tipo
-			// ni hijos. Una cadena (y un ciclo) es error.
-			if crs[to] {
-				return fmt.Errorf("%s: %q: the content reference %q points to an element that has a content reference", where, e.Path, e.ContentReference)
-			}
-			m.elsewhere[e.Path] = to
-			if err := add(e.Path); err != nil {
-				return err
-			}
-			continue
-		}
-
-		var codes []string
-		for _, t := range e.Type {
-			if t.Code == "" {
-				return fmt.Errorf("%s: %q: a type has no code", where, e.Path)
-			}
-			// Un código es un tipo del modelo o un tipo del sistema de FHIRPath
-			// (extension-structuredefinition-fhir-type.html).
-			if _, ok := b.defs[t.Code]; !ok && !b.system[t.Code] {
-				return fmt.Errorf("%s: %q: the type code %q is not a type", where, e.Path, t.Code)
-			}
-			// Un tipo del sistema es el de un valor primitivo: solo vale en un
-			// elemento de un solo tipo, no como variante de un [x] (cuyo nombre se
-			// formaría con la URL) ni junto a otros tipos.
-			if _, ok := b.defs[t.Code]; !ok && (len(e.Type) > 1 || strings.HasSuffix(name, choiceSuffix)) {
-				return fmt.Errorf("%s: %q: the system type %q is valid only in an element of one type", where, e.Path, t.Code)
-			}
-			if !slices.Contains(codes, t.Code) {
-				codes = append(codes, t.Code)
-			}
-		}
-		refsOf := func(match func(string) bool) ([]string, error) {
-			var out []string
-			for _, t := range e.Type {
-				if !match(t.Code) {
-					continue
-				}
-				for _, p := range t.TargetProfile {
-					tt, err := b.targetType(p)
-					if err != nil {
-						return nil, fmt.Errorf("%s: %q: target profile %q: %w", where, e.Path, p, err)
-					}
-					if !slices.Contains(out, tt) {
-						out = append(out, tt)
-					}
-				}
-			}
-			return out, nil
-		}
-		base, isChoice := strings.CutSuffix(name, choiceSuffix)
-		if len(e.Type) == 0 {
-			if isChoice {
-				return fmt.Errorf("%s: %q: the choice element has no types", where, e.Path)
-			}
-			return fmt.Errorf("%s: %q has neither a type nor a content reference", where, e.Path)
-		}
-		if isChoice {
-			basePath := parent + "." + base
-			if seen[basePath] {
-				return fmt.Errorf("%s: %q: the element %q is also defined as an element of its own", where, e.Path, basePath)
-			}
-			m.choices[basePath] = codes
-			if err := add(basePath); err != nil {
-				return err
-			}
-			for _, code := range codes {
-				variant := basePath + upperFirst(code)
-				if seen[variant] {
-					return fmt.Errorf("%s: %q: the variant %q is also defined as an element of its own", where, e.Path, variant)
-				}
-				m.pathType[variant] = code
-				if err := add(variant); err != nil {
-					return err
-				}
-				rs, err := refsOf(func(x string) bool { return x == code })
-				if err != nil {
-					return err
-				}
-				if len(rs) > 0 {
-					m.refs[variant] = rs
-				}
-			}
-			if len(e.Type) == 1 {
-				b.addFHIRType(d, e, basePath+upperFirst(codes[0]))
-			}
-			continue
-		}
-		if err := add(e.Path); err != nil {
+	for _, e := range elements {
+		if err := p.addElement(e); err != nil {
 			return err
 		}
-		if len(codes) == 1 {
-			m.pathType[e.Path] = codes[0]
+	}
+	return nil
+}
+
+// snapshotPass lleva el estado de la lectura del snapshot de un tipo: los
+// caminos vistos, los que tienen contentReference, quién reclama cada camino
+// indexado y los id vistos.
+type snapshotPass struct {
+	b        *modelBuilder
+	d        *typeDef
+	typeName string
+	where    string
+	seen     map[string]bool
+	crs      map[string]bool
+	claimed  map[string]string
+	ids      map[string]bool
+}
+
+// notePath comprueba la identidad de un elemento (id, path, rebanada, raíz del
+// tipo, repetido) y anota su camino.
+func (p *snapshotPass) notePath(e elementDoc) error {
+	where := p.where
+	// sdf-14: «All element definitions must have an id». El id es lo que
+	// distingue una rebanada (path:nombre); sin él no se sabe si lo es.
+	if e.ID == "" {
+		return fmt.Errorf("%s: the element %q has no id (sdf-14)", where, e.Path)
+	}
+	// El path nombra el elemento (elementdefinition.html: «a "."-separated
+	// list of ancestor elements»); el nombre de una rebanada va en el id y en
+	// sliceName. eld-19 admite sintácticamente «:nombre» en un componente,
+	// pero ningún núcleo lo usa en un path y el modelo indexa por path: una
+	// marca de rebanada en él rompe que ninguna clave la lleve.
+	if strings.Contains(e.Path, ":") {
+		return fmt.Errorf("%s: the path %q has a slice mark: the slice name belongs in the id", where, e.Path)
+	}
+	// elementdefinition.html, «id» (Element ids): el id de un elemento es su path
+	// con el nombre de cada rebanada tras «:». Un id que no corresponde al path
+	// no dice qué elemento es ni si es una rebanada.
+	if stripSliceNames(e.ID) != e.Path {
+		return fmt.Errorf("%s: the element %q: the id %q does not match the path", where, e.Path, e.ID)
+	}
+	if isSlice(e) {
+		// Una rebanada restringe un elemento ya visto: la raíz de una rebanada
+		// (id que termina en :nombre), el elemento sin el nombre; un
+		// descendiente, la rebanada de la que cuelga.
+		if !p.ids[sliceParentID(e.ID)] {
+			return fmt.Errorf("%s: the slice %q has no base element %q before it", where, e.ID, sliceParentID(e.ID))
 		}
-		rs, err := refsOf(func(string) bool { return true })
+		p.ids[e.ID] = true
+		return nil
+	}
+	p.ids[e.ID] = true
+	if e.ContentReference != "" {
+		p.crs[e.Path] = true
+	}
+	top, _, _ := strings.Cut(e.Path, ".")
+	if top != p.typeName {
+		return fmt.Errorf("%s: the path %q is not under the type", where, e.Path)
+	}
+	if p.seen[e.Path] {
+		return fmt.Errorf("%s: the path %q is listed twice", where, e.Path)
+	}
+	p.seen[e.Path] = true
+	return nil
+}
+
+// addElement llena las tablas del modelo con un elemento del snapshot.
+func (p *snapshotPass) addElement(e elementDoc) error {
+	m, where := p.b.m, p.where
+	// sdf-3 y eld-2 valen para todo elemento del snapshot, rebanadas incluidas.
+	lo, hi, err := cardinalityOf(e)
+	if err != nil {
+		return fmt.Errorf("%s: %q: %w", where, e.Path, err)
+	}
+	if isSlice(e) {
+		return nil
+	}
+	i := strings.LastIndex(e.Path, ".")
+	if i < 0 {
+		return nil // la raíz del tipo
+	}
+	parent, name := e.Path[:i], e.Path[i+1:]
+	m.children[parent] = append(m.children[parent], name)
+
+	if !p.seen[parent] {
+		return fmt.Errorf("%s: %q has no parent element %q in the snapshot", where, e.Path, parent)
+	}
+	if e.ContentReference != "" {
+		return p.addContentReference(e, lo, hi)
+	}
+	codes, err := p.typeCodes(e, name)
+	if err != nil {
+		return err
+	}
+	base, isChoice := strings.CutSuffix(name, choiceSuffix)
+	if len(e.Type) == 0 {
+		if isChoice {
+			return fmt.Errorf("%s: %q: the choice element has no types", where, e.Path)
+		}
+		return fmt.Errorf("%s: %q has neither a type nor a content reference", where, e.Path)
+	}
+	if isChoice {
+		return p.addChoice(e, parent+"."+base, codes, lo, hi)
+	}
+	if err := p.claim(e, e.Path, lo, hi); err != nil {
+		return err
+	}
+	if len(codes) == 1 {
+		m.pathType[e.Path] = codes[0]
+	}
+	rs, err := p.refsOf(e, func(string) bool { return true })
+	if err != nil {
+		return err
+	}
+	if len(rs) > 0 {
+		m.refs[e.Path] = rs
+	}
+	if len(e.Type) == 1 {
+		p.b.addFHIRType(p.d, e, e.Path)
+	}
+	return nil
+}
+
+// claim indexa un camino del modelo (el del elemento, la base de un [x] o una
+// variante) con la cardinalidad del elemento. Cada camino que el modelo indexa
+// lo reclama un solo elemento del snapshot: otro con el mismo nombre pisaría su
+// cardinalidad, su tipo y sus destinos (elementdefinition.html, «Choice types»).
+func (p *snapshotPass) claim(e elementDoc, path string, lo, hi int32) error {
+	m := p.b.m
+	if from, dup := p.claimed[path]; dup {
+		return fmt.Errorf("%s: %q: the path %q collides with the one of %q", p.where, e.Path, path, from)
+	}
+	p.claimed[path] = e.Path
+	m.card[path] = cardinality{lo, hi}
+	if e.IsSummary {
+		m.summary[path] = true
+	}
+	if e.IsModifier {
+		m.modifier[path] = true
+	}
+	return nil
+}
+
+// addContentReference indexa un elemento que toma su contenido de otro.
+func (p *snapshotPass) addContentReference(e elementDoc, lo, hi int32) error {
+	where := p.where
+	// eld-5: «if the element definition has a contentReference, it cannot
+	// have type ...».
+	if len(e.Type) > 0 {
+		return fmt.Errorf("%s: %q: the element has a content reference and a type (eld-5)", where, e.Path)
+	}
+	from, to, ok := strings.Cut(e.ContentReference, "#")
+	if !ok || to == "" {
+		return fmt.Errorf("%s: %q: the content reference %q has no fragment", where, e.Path, e.ContentReference)
+	}
+	// elementdefinition.html: el destino es «an element defined elsewhere
+	// in the definition»: la url, si la hay, es la de este mismo
+	// StructureDefinition (R5 admite url#ruta).
+	if from != "" {
+		if u, _, _ := strings.Cut(from, "|"); u != p.d.url {
+			return fmt.Errorf("%s: %q: the content reference %q names another definition (%s)", where, e.Path, e.ContentReference, u)
+		}
+	}
+	if !p.seen[to] {
+		return fmt.Errorf("%s: %q: the content reference %q is not an element of this definition", where, e.Path, e.ContentReference)
+	}
+	// elementdefinition.html: el destino aporta «all the rules that are in
+	// the ElementDefinition for the element» (y siempre «the non-constrained
+	// definition»): si fuera a su vez un contentReference, no aportaría tipo
+	// ni hijos. Una cadena (y un ciclo) es error.
+	if p.crs[to] {
+		return fmt.Errorf("%s: %q: the content reference %q points to an element that has a content reference", where, e.Path, e.ContentReference)
+	}
+	p.b.m.elsewhere[e.Path] = to
+	return p.claim(e, e.Path, lo, hi)
+}
+
+// typeCodes devuelve los códigos de tipo de un elemento, sin repetir, y exige
+// que cada uno sea un tipo del modelo o del sistema.
+func (p *snapshotPass) typeCodes(e elementDoc, name string) ([]string, error) {
+	b, where := p.b, p.where
+	var codes []string
+	for _, t := range e.Type {
+		if t.Code == "" {
+			return nil, fmt.Errorf("%s: %q: a type has no code", where, e.Path)
+		}
+		// Un código es un tipo del modelo o un tipo del sistema de FHIRPath
+		// (extension-structuredefinition-fhir-type.html).
+		if _, ok := b.defs[t.Code]; !ok && !b.system[t.Code] {
+			return nil, fmt.Errorf("%s: %q: the type code %q is not a type", where, e.Path, t.Code)
+		}
+		// Un tipo del sistema es el de un valor primitivo: solo vale en un
+		// elemento de un solo tipo, no como variante de un [x] (cuyo nombre se
+		// formaría con la URL) ni junto a otros tipos.
+		if _, ok := b.defs[t.Code]; !ok && (len(e.Type) > 1 || strings.HasSuffix(name, choiceSuffix)) {
+			return nil, fmt.Errorf("%s: %q: the system type %q is valid only in an element of one type", where, e.Path, t.Code)
+		}
+		if !slices.Contains(codes, t.Code) {
+			codes = append(codes, t.Code)
+		}
+	}
+	return codes, nil
+}
+
+// refsOf devuelve los tipos a los que apuntan los targetProfile de los tipos del
+// elemento que cumplen match, sin repetir.
+func (p *snapshotPass) refsOf(e elementDoc, match func(string) bool) ([]string, error) {
+	var out []string
+	for _, t := range e.Type {
+		if !match(t.Code) {
+			continue
+		}
+		for _, tp := range t.TargetProfile {
+			tt, err := p.b.targetType(tp)
+			if err != nil {
+				return nil, fmt.Errorf("%s: %q: target profile %q: %w", p.where, e.Path, tp, err)
+			}
+			if !slices.Contains(out, tt) {
+				out = append(out, tt)
+			}
+		}
+	}
+	return out, nil
+}
+
+// addChoice indexa un elemento [x]: su base y una variante por cada tipo.
+func (p *snapshotPass) addChoice(e elementDoc, basePath string, codes []string, lo, hi int32) error {
+	m := p.b.m
+	if p.seen[basePath] {
+		return fmt.Errorf("%s: %q: the element %q is also defined as an element of its own", p.where, e.Path, basePath)
+	}
+	m.choices[basePath] = codes
+	if err := p.claim(e, basePath, lo, hi); err != nil {
+		return err
+	}
+	for _, code := range codes {
+		variant := basePath + upperFirst(code)
+		if p.seen[variant] {
+			return fmt.Errorf("%s: %q: the variant %q is also defined as an element of its own", p.where, e.Path, variant)
+		}
+		m.pathType[variant] = code
+		if err := p.claim(e, variant, lo, hi); err != nil {
+			return err
+		}
+		rs, err := p.refsOf(e, func(x string) bool { return x == code })
 		if err != nil {
 			return err
 		}
 		if len(rs) > 0 {
-			m.refs[e.Path] = rs
+			m.refs[variant] = rs
 		}
-		if len(e.Type) == 1 {
-			b.addFHIRType(d, e, e.Path)
-		}
+	}
+	if len(e.Type) == 1 {
+		p.b.addFHIRType(p.d, e, basePath+upperFirst(codes[0]))
 	}
 	return nil
 }

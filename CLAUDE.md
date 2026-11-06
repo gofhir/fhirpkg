@@ -21,7 +21,7 @@ Este repo se rige por `~/projects/personal/health-platform/workspace/NUCLEO.md`.
 
 - Desde el 05-11-2026 el repo es público y **MIT**: commits con [Conventional Commits](https://www.conventionalcommits.org/) (`feat:`, `fix:`, `docs:`, `chore:`, `ci:`, `refactor:`, `test:`; `feat!:` o `BREAKING CHANGE:` para lo incompatible), sin trailers ni atribución, y **todo cambio entra por pull request** a `main`, con CI en verde (`ci`, `lint`, `vuln`). Sin push ni merge automáticos.
 - El release lo hace release-please (`.github/workflows/release-please.yml`, `release-please-config.json`, `.release-please-manifest.json`): al fusionar a `main` abre o actualiza un PR de release con el `CHANGELOG.md` generado (no se escribe a mano); fusionarlo crea el tag `vX.Y.Z` y el GitHub Release. Antes de 1.0, `feat` sube el minor y un cambio incompatible también (`bump-minor-pre-major`).
-- El primer release sale como `v0.1.0` por `"release-as": "0.1.0"` en el config. **Tras fusionar el PR de ese release, quitar `release-as`** del config (si no, todos saldrían 0.1.0).
+- El primer release, `v0.1.0` (06-11-2026), salió con `"release-as": "0.1.0"`, ya retirado del config. Desde ahí la versión la calcula release-please desde los commits (`bump-minor-pre-major`: antes de 1.0, un cambio incompatible sube la menor).
 - README en inglés; `docs/` y comentarios en español.
 
 ## Comandos

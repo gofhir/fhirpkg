@@ -109,6 +109,7 @@ func fpStatOf(ver string) *fpStat {
 // modelos desaparece al corregir en models las rutas de la clase
 // nested-backbone-type; no queda ninguna sin explicar.
 func TestFHIRPathEvaluationDifferential(t *testing.T) {
+	t.Parallel() // plan 005 §18: las tres pruebas largas e independientes corren juntas
 	compiled := make([]*fhirpath.Expression, len(evalExpressions))
 	for i, src := range evalExpressions {
 		compiled[i] = fhirpath.MustCompile(src)

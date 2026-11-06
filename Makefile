@@ -34,7 +34,7 @@ check-packages: fetch
 		echo "check-packages: ../go-searchindex/definitions/data is missing, so the searchindex comparison would be skipped (ALLOW_NO_SEARCHINDEX=1 to allow)"; exit 1; fi
 	FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages go test -count=1 -v -run 'TestReal|TestNormalize' .
 	python3 -I scripts/projection_oracle.py --self-test --packages $(CURDIR)/.cache/packages
-	$(MAKE) parity
+	$(MAKE) parity PARITY_BENCH=0
 
 # Paridad del modelo de tipos (plan 003) y del normalizador (plan 004), en el módulo
 # parity/ (su propio go.mod:
@@ -50,6 +50,7 @@ check-packages: fetch
 # parity/testdata/normalizer.json, y el benchmark contra models va en el reporte. Escribe
 # docs/evidence/<fecha>-parity.md y el bloque de cifras de
 # docs/issues/models-fhirpath-model-gaps.md.
+PARITY_BENCH ?= 1
 parity: fetch
 	scripts/fetch-packages.sh $(CURDIR)/scripts/examples.sha256 >/dev/null
 	scripts/fetch-synthea.sh >/dev/null
@@ -57,7 +58,7 @@ parity: fetch
 		SEARCHINDEX_PACKAGES=$$PWD/.cache/packages go test -count=1 -run '^TestWriteGeneratedCorpus$$' .
 	cd parity && FHIRPKG_PACKAGES=$(CURDIR)/.cache/packages EXAMPLES_PACKAGES=$(CURDIR)/.cache/packages \
 		SYNTHEA_ZIP=$(CURDIR)/.cache/synthea/synthea_sample_data_fhir_r4_nov2021.zip GEN_CORPUS=$(CURDIR)/.cache/generated \
-		PARITY_REPORT=$(CURDIR)/docs/evidence/$$(date +%Y-%m-%d)-parity.md PARITY_ISSUE=$(CURDIR)/docs/issues/models-fhirpath-model-gaps.md \
+		PARITY_BENCH=$(PARITY_BENCH) PARITY_REPORT=$(CURDIR)/docs/evidence/$$(date +%Y-%m-%d)-parity.md PARITY_ISSUE=$(CURDIR)/docs/issues/models-fhirpath-model-gaps.md \
 		go test -count=1 -timeout 20m -v ./...
 
 # Dorado de Conflicts() por versión (testdata/golden, plan 002): lo reescribe con

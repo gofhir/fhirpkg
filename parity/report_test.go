@@ -28,7 +28,7 @@ func setClassified(c *classified) {
 
 func TestMain(m *testing.M) {
 	code := m.Run()
-	if code == 0 {
+	if code == 0 && !benchOff() {
 		if path := os.Getenv("PARITY_REPORT"); path != "" {
 			if err := os.WriteFile(path, []byte(renderReport()), 0o644); err != nil {
 				fmt.Fprintln(os.Stderr, err)

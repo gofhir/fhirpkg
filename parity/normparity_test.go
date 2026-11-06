@@ -583,6 +583,7 @@ func loadParityCounts(t testing.TB) []parityCount {
 // (PARITY_UPDATE=1 las reescribe: revisar el diff). No puede haber un recurso
 // sin clasificar, ni un recurso que Normalize acepte y no sea idempotente.
 func TestNormalizerParity(t *testing.T) {
+	t.Parallel() // plan 005 §18: las tres pruebas largas e independientes corren juntas
 	srcs := []source{officialSource(), probeSource()}
 	if z := os.Getenv("SYNTHEA_ZIP"); z != "" {
 		srcs = append(srcs, syntheaSource(z))

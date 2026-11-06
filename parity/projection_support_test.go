@@ -52,7 +52,7 @@ func loadRawCore(t testing.TB, v *version) rawCore {
 		if err := json.Unmarshal(r.Raw, &sd); err != nil {
 			t.Fatal(err)
 		}
-		if sd.Kind == "logical" || sd.Snapshot == nil || !(sd.Derivation == "specialization" || sd.Derivation == "" && sd.BaseDefinition == "") {
+		if sd.Kind == "logical" || sd.Snapshot == nil || (sd.Derivation != "specialization" && (sd.Derivation != "" || sd.BaseDefinition != "")) {
 			continue
 		}
 		s := &rawSD{name: sd.Type, kind: sd.Kind, byParent: map[string][]*rawElem{}, byPath: map[string]*rawElem{}}
@@ -130,11 +130,6 @@ func (c rawCore) child(ki keyInfo) string {
 		return ki.code
 	}
 	return ""
-}
-
-func (c rawCore) isPrimitive(code string) bool {
-	s, ok := c[code]
-	return ok && s.kind == "primitive-type"
 }
 
 // ---- Capa literal ----

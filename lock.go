@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strings"
 )
 
 // LockSchema es la versión del formato de fhirpkg.lock.
@@ -138,51 +139,82 @@ func (l Lock) Validate() error {
 	if l.FHIRVersion == "" {
 		return fmt.Errorf("invalid lock: empty fhirVersion")
 	}
+	byID, err := l.validatePackages()
+	if err != nil {
+		return err
+	}
+	if err := l.validateCoreAndRoots(byID); err != nil {
+		return err
+	}
+	if err := l.validateOrder(byID); err != nil {
+		return err
+	}
+	return l.validateExceptions(byID)
+}
+
+// validatePackages comprueba cada paquete (nombre, versión, repetidos, sha256,
+// exclusión, dependencias), el orden por name#version y que las dependencias y
+// las rutas (via) existan en el lock. Devuelve los paquetes por id.
+func (l Lock) validatePackages() (map[string]LockedPackage, error) {
 	byID := make(map[string]LockedPackage, len(l.Packages))
 	byName := make(map[string]string, len(l.Packages))
 	for _, p := range l.Packages {
-		id := p.ID()
-		if err := validName(p.Name); err != nil {
-			return fmt.Errorf("invalid lock: package %q: %w", id, err)
+		if err := validatePackage(p, byID, byName); err != nil {
+			return nil, err
 		}
-		if err := validVersion(p.Version); err != nil {
-			return fmt.Errorf("invalid lock: package %q: %w", id, err)
-		}
-		if _, dup := byID[id]; dup {
-			return fmt.Errorf("invalid lock: duplicate package %s", id)
-		}
-		if other, dup := byName[p.Name]; dup {
-			return fmt.Errorf("invalid lock: package %s in two versions (%s and %s)", p.Name, other, p.Version)
-		}
-		if !isSHA256(p.SHA256) {
-			return fmt.Errorf("invalid lock: package %s: sha256 is not 64 lowercase hex digits", id)
-		}
-		if p.Excluded != (p.ExcludedReason != "") {
-			return fmt.Errorf("invalid lock: package %s: excluded and excludedReason must go together", id)
-		}
-		depNames := make(map[string]bool, len(p.Dependencies))
-		for _, d := range p.Dependencies {
-			name, _, _ := splitID(d)
-			if depNames[name] {
-				return fmt.Errorf("invalid lock: package %s lists a dependency on %s twice", id, name)
-			}
-			depNames[name] = true
-		}
-		byID[id] = p
+		byID[p.ID()] = p
 		byName[p.Name] = p.Version
 	}
 	for i := 1; i < len(l.Packages); i++ {
 		if l.Packages[i-1].ID() >= l.Packages[i].ID() {
-			return fmt.Errorf("invalid lock: packages are not sorted by name#version")
+			return nil, fmt.Errorf("invalid lock: packages are not sorted by name#version")
 		}
 	}
 	for _, p := range l.Packages {
 		for _, d := range append(append([]string{}, p.Dependencies...), p.Via...) {
 			if _, ok := byID[d]; !ok {
-				return fmt.Errorf("invalid lock: package %s refers to %s, which is not in the lock", p.ID(), d)
+				return nil, fmt.Errorf("invalid lock: package %s refers to %s, which is not in the lock", p.ID(), d)
 			}
 		}
 	}
+	return byID, nil
+}
+
+// validatePackage comprueba un paquete contra los ya vistos (por id y por nombre).
+func validatePackage(p LockedPackage, byID map[string]LockedPackage, byName map[string]string) error {
+	id := p.ID()
+	if err := validName(p.Name); err != nil {
+		return fmt.Errorf("invalid lock: package %q: %w", id, err)
+	}
+	if err := validVersion(p.Version); err != nil {
+		return fmt.Errorf("invalid lock: package %q: %w", id, err)
+	}
+	if _, dup := byID[id]; dup {
+		return fmt.Errorf("invalid lock: duplicate package %s", id)
+	}
+	if other, dup := byName[p.Name]; dup {
+		return fmt.Errorf("invalid lock: package %s in two versions (%s and %s)", p.Name, other, p.Version)
+	}
+	if !isSHA256(p.SHA256) {
+		return fmt.Errorf("invalid lock: package %s: sha256 is not 64 lowercase hex digits", id)
+	}
+	if p.Excluded != (p.ExcludedReason != "") {
+		return fmt.Errorf("invalid lock: package %s: excluded and excludedReason must go together", id)
+	}
+	depNames := make(map[string]bool, len(p.Dependencies))
+	for _, d := range p.Dependencies {
+		name, _, _ := strings.Cut(d, "#")
+		if depNames[name] {
+			return fmt.Errorf("invalid lock: package %s lists a dependency on %s twice", id, name)
+		}
+		depNames[name] = true
+	}
+	return nil
+}
+
+// validateCoreAndRoots comprueba el núcleo (presente, leído y de la versión del
+// lock) y las raíces (presentes, leídas y ordenadas).
+func (l Lock) validateCoreAndRoots(byID map[string]LockedPackage) error {
 	core, ok := byID[l.Core]
 	if !ok {
 		return fmt.Errorf("invalid lock: core %q is not in the lock", l.Core)
@@ -205,7 +237,12 @@ func (l Lock) Validate() error {
 	if !sort.StringsAreSorted(l.Roots) {
 		return fmt.Errorf("invalid lock: roots are not sorted")
 	}
-	// Order: exactamente los no excluidos, con las dependencias primero.
+	return nil
+}
+
+// validateOrder comprueba Order: exactamente los no excluidos, con las
+// dependencias primero.
+func (l Lock) validateOrder(byID map[string]LockedPackage) error {
 	pos := make(map[string]int, len(l.Order))
 	for i, id := range l.Order {
 		p, ok := byID[id]
@@ -231,6 +268,12 @@ func (l Lock) Validate() error {
 			}
 		}
 	}
+	return nil
+}
+
+// validateExceptions comprueba que cada excepción nombre un paquete leído, con
+// motivo y sin repetirse.
+func (l Lock) validateExceptions(byID map[string]LockedPackage) error {
 	seen := map[string]bool{}
 	for _, e := range l.Exceptions {
 		p, ok := byID[e.Package]

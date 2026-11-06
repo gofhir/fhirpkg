@@ -12,7 +12,7 @@
 # fija los workers (por defecto 3).
 #
 # Uso: python3 -I scripts/mutations.py [prefijo ...]   (p. ej. M01 M07)
-import concurrent.futures, datetime, hashlib, json, os, re, shutil, subprocess, sys, tempfile, time
+import concurrent.futures, datetime, hashlib, json, os, re, shutil, signal, subprocess, sys, tempfile, time
 
 R = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CACHE = os.path.join(R, ".cache", "mutations.json")
@@ -36,19 +36,19 @@ muts = {
  "M04-double-version-picks-one": [("resolve.go", "if len(a.Doubles) > 0 {", "if false && len(a.Doubles) > 0 {")],
  "M05-legacy-version-list-ignored": [("manifest.go", "case len(raw.FHIRVersionList) > 0:", "case false && len(raw.FHIRVersionList) > 0:")],
  "M06-unsafe-tgz-accepted": [("tgz.go", "if err := checkEntryName(h.Name); err != nil {", "if err := checkEntryName(h.Name); false && err != nil {")],
- "M07-links-accepted": [("tgz.go", "case tar.TypeDir:\n\t\t\tcontinue", "case tar.TypeDir, tar.TypeSymlink, tar.TypeLink:\n\t\t\tcontinue")],
- "M08-entry-size-limit-ignored": [("tgz.go", "if h.Size < 0 || h.Size > lim.MaxEntry {", "if h.Size < 0 {")],
- "M09-total-size-limit-ignored": [("tgz.go", "if total > lim.MaxTotal {", "if false {")],
- "M10-duplicate-entry-accepted": [("tgz.go", "if seen[name] {", "if false {")],
+ "M07-links-accepted": [("tgz.go", "case tar.TypeDir:\n\t\treturn true, nil", "case tar.TypeDir, tar.TypeSymlink, tar.TypeLink:\n\t\treturn true, nil")],
+ "M08-entry-size-limit-ignored": [("tgz.go", "if h.Size < 0 || h.Size > s.lim.MaxEntry {", "if h.Size < 0 {")],
+ "M09-total-size-limit-ignored": [("tgz.go", "if s.total > s.lim.MaxTotal {", "if false {")],
+ "M10-duplicate-entry-accepted": [("tgz.go", "if s.seen[name] {", "if false {")],
  "M11-cycle-tolerated": [("resolve.go", "if len(a.Cycle) > 0 {", "if false && len(a.Cycle) > 0 {")],
  "M12-unused-exception-tolerated": [("resolve.go", "if len(unused) > 0 {", "if false {")],
  "M13-foreign-package-needs-no-exception": [("resolve.go", "if _, ok := exc[id]; ok {", "if true {")],
  "M14-wildcard-picks-lowest": [("version.go", "compareSemver(sv, best) > 0", "compareSemver(sv, best) < 0")],
  "M15-wildcard-takes-prerelease": [("version.go", "if !ok || sv.pre != \"\" || fmt.Sprintf(\"%d.%d\", sv.major, sv.minor) != v.prefix {", "if !ok || fmt.Sprintf(\"%d.%d\", sv.major, sv.minor) != v.prefix {")],
- "M16-open-skips-series-check": [("open.go", "!slices.Contains(m.Series(), coreSeries) && !exc[id]", "false")],
+ "M16-open-skips-series-check": [("open.go", "!slices.Contains(m.Series(), coreSeries) && !excepted", "false")],
  "M17-open-skips-manifest-check": [("open.go", "if err := matchLocked(c.manifest, lp); err != nil {", "if err := matchLocked(c.manifest, lp); false && err != nil {")],
  "M18-subfolder-files-read": [("tgz.go", "if !ok || strings.Contains(rest, \"/\") {", "if !ok {")],
- "M19-root-order-matters": [("graph.go", "\tsort.Strings(sorted)\n\tg := &Graph", "\t_ = sort.Strings\n\tg := &Graph")],
+ "M19-root-order-matters": [("graph.go", "\tsort.Strings(sorted)\n\tx := &explorer", "\t_ = sort.Strings\n\tx := &explorer")],
  "M20-core-with-several-versions-accepted": [("graph.go", "if len(m.FHIRVersions) != 1 {", "if len(m.FHIRVersions) < 1 {")],
  "M21-lock-order-not-checked": [("lock.go", "if j, ok := pos[d]; ok && j >= i {", "if j, ok := pos[d]; ok && j >= i && false {")],
  "M22-version-range-accepted": [("version.go", "strings.ContainsAny(s, \" \\t\\n^~<>=|#/\")", "false")],
@@ -64,7 +64,7 @@ muts = {
  "M32-excluded-non-core-accepted": [("open.go", "\t\tif !m.IsCore() {\n\t\t\treturn nil, fmt.Errorf(\"%s: excluded, but", "\t\tif false {\n\t\t\treturn nil, fmt.Errorf(\"%s: excluded, but")],
  "M33-excluded-core-of-the-locks-series-accepted": [("open.go", "\t\tif len(m.Series()) == 0 || slices.Contains(m.Series(), coreSeries) {\n\t\t\treturn nil, fmt.Errorf(\"%s: excluded", "\t\tif false {\n\t\t\treturn nil, fmt.Errorf(\"%s: excluded")],
  "M34-excluded-packages-not-verified": [("open.go", "\t\tif !lp.Excluded {\n\t\t\tcontinue", "\t\tif true {\n\t\t\tcontinue")],
- "M35-lock-core-need-not-be-core": [("open.go", "if id == lock.Core && !m.IsCore() {", "if false {")],
+ "M35-lock-core-need-not-be-core": [("open.go", "if id == lockCore && !m.IsCore() {", "if false {")],
  "M36-excluded-root-accepted": [("lock.go", "\t\tif rp.Excluded {", "\t\tif false && rp.Excluded {")],
  "M37-undeclared-counts-cores": [("graph.go", "len(n.Manifest.FHIRVersions) == 0 && !n.Manifest.IsCore()", "len(n.Manifest.FHIRVersions) == 0")],
  "M38-lock-duplicate-dependency-accepted": [("lock.go", "if depNames[name] {", "if false {")],
@@ -72,7 +72,9 @@ muts = {
  "M40-excluded-core-without-series-accepted": [("open.go", "len(m.Series()) == 0 || slices.Contains(m.Series(), coreSeries)", "slices.Contains(m.Series(), coreSeries)")],
  "M41-scan-without-resources-stops-at-the-manifest": [("tgz.go", "\t\t\tmanifest = body\n\t\t\tcontinue", "\t\t\tmanifest = body\n\t\t\tif !withResources {\n\t\t\t\tbreak\n\t\t\t}\n\t\t\tcontinue")],
  "M42-excluded-verified-after-the-main-loop": moved_excluded_block(),
- "M44-gzip-trailer-not-verified": [("tgz.go", "if _, err := io.Copy(io.Discard, zr); err != nil {", "if _, err := io.Copy(io.Discard, zr); false && err != nil {")],
+ "M44-gzip-trailer-not-verified": [("tgz.go", "\t\t\treturn fmt.Errorf(\"invalid gzip stream: %w\", err)", "\t\t\treturn nil")],
+ "M44b-trailing-padding-unbounded": [("tgz.go", "if total > maxTrailingPadding {", "if false {")],
+ "M44c-trailing-padding-may-be-data": [("tgz.go", "\t\t\tif c != 0 {", "\t\t\tif c != 0 && false {")],
  "M43-scan-without-resources-ignores-tar-errors": [("tgz.go", "\t\t\treturn nil, fmt.Errorf(\"invalid tar: %w\", err)", "\t\t\tif !withResources {\n\t\t\t\tbreak\n\t\t\t}\n\t\t\treturn nil, fmt.Errorf(\"invalid tar: %w\", err)")],
  # Plan 002: la cascada de canónicos, la regla de base:code y la herencia.
  "M45-series-step-off": [("cascade.go", "\t\tif !declaresOtherSeries(c.info.fhirVersions, coreSeries) {", "\t\tif true {")],
@@ -129,7 +131,7 @@ muts = {
  "M96-date-accepts-year-zero": [("order.go", " || y == \"0000\"", "")],
  "M97-natural-compares-digits-as-text": [("order.go", "\t\t\tif c := cmpDigits(ta, tb); c != 0 {", "\t\t\tif c := strings.Compare(ta, tb); c != 0 {")],
  "M98-searchparameter-without-base-is-an-error": [("searchparameters.go", "\t\t\tcontinue\n\t\t}\n\t\tif d.Code == \"\" {\n\t\t\treturn fmt.Errorf(\"%s: %s: search parameter %s has no code\", w.pkgID", "\t\t\treturn fmt.Errorf(\"no base\")\n\t\t}\n\t\tif d.Code == \"\" {\n\t\t\treturn fmt.Errorf(\"%s: %s: search parameter %s has no code\", w.pkgID")],
- "M99-unresolved-sp-canonical-falls-back-to-the-first-candidate": [("searchparameters.go", "\t\t\tif err := collectUnresolved(k.url, c.groups[k].cands, docs, unresolvedBC, disagree); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t\tcontinue", "\t\t\tw = c.groups[k].cands[0]")],
+ "M99-unresolved-sp-canonical-falls-back-to-the-first-candidate": [("searchparameters.go", "\t\t\tif err := collectUnresolved(k.url, c.groups[k].cands, docs, unresolvedBC, disagree); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n\t\t\tcontinue", "\t\t\t_, _ = unresolvedBC, disagree\n\t\t\tw = c.groups[k].cands[0]")],
  "M100-guard-bypass-strings-fields": [("context.go", "func candidateList(cs []*cand) string {", "var leaked = strings.Fields(\"ValueSet CodeSystem\")\n\nfunc candidateList(cs []*cand) string {")],
  "M101-guard-bypass-leading-space": [("context.go", "func candidateList(cs []*cand) string {", "var leaked = \" SearchParameter\"\n\nfunc candidateList(cs []*cand) string {")],
  "M102-guard-bypass-in-a-001-file": [("lock.go", "// LockSchema es la versión", "var leaked = \"lastUpdated\"\n\n// LockSchema es la versión")],
@@ -150,7 +152,7 @@ muts = {
  "R1-X2-basecode-allfail-no-fallback": [("searchparameters.go", "\t\t\tnext = cur // todos pierden: el paso no separa", "\t\t\t_ = next")],
  "R1-X3-unresolved-resource-SD-tolerated": [("searchparameters.go", "\t\t\t\t\treturn fmt.Errorf(\"%s: the definition of resource type %q is unresolved (%s): no type can be taken from it\", k.url, d.Type, explainTrace(g.dec.trace))", "\t\t\t\t\t_ = d")],
  "R1-X4-duplicate-type-tolerated": [("searchparameters.go", "\t\t\treturn fmt.Errorf(\"resource type %q is defined by more than one structure definition (%s and %s)\", d.Type, prev.url, k.url)", "\t\t\t_ = prev")],
- "R1-X5-cycle-tolerated": [("searchparameters.go", "\t\t\t\treturn fmt.Errorf(\"inheritance cycle through resource type %s: %s\", p, strings.Join(append(chain, p), \" -> \"))", "\t\t\t\tbreak")],
+ "R1-X5-cycle-tolerated": [("searchparameters.go", "\t\t\t\treturn nil, fmt.Errorf(\"inheritance cycle through resource type %s: %s\", p, strings.Join(append(chain, p), \" -> \"))", "\t\t\t\tbreak")],
  "R1-X6-typefor-ignores-visibility": [("context.go", "\t\tif len(c.visibleCands(c.groups[key{t, url}], vis)) > 0 {", "\t\tif len(c.visibleCands(c.groups[key{t, url}], nil)) > 0 {")],
  "R1-X7-base-not-deduped": [("searchparameters.go", "\t\t\tif !seen[b] {", "\t\t\tif true {")],
  "R1-X8-empty-pkg-canonical-is-copy": [("cascade.go", "\treturn p != \"\" && r != \"\" && p != r", "\treturn r != \"\" && p != r")],
@@ -187,93 +189,93 @@ muts = {
  "M122-issubtype-not-transitive": [("model.go", "for cur := child; cur != \"\"; cur = m.types[cur].parent {", "for cur := child; cur != \"\"; cur = \"\" {")],
  "M123-isresource-with-abstracts": [("modelbuild.go", "resource: d.doc.Kind == kindResource && !d.doc.Abstract,", "resource: d.doc.Kind == kindResource,")],
  "M124-isresource-without-kind": [("modelbuild.go", "resource: d.doc.Kind == kindResource && !d.doc.Abstract,", "resource: !d.doc.Abstract,")],
- "M125-slices-as-children": [("modelbuild.go", "\t\tif isSlice(e) {\n\t\t\tcontinue\n\t\t}\n\t\ti := strings", "\t\tif false {\n\t\t\tcontinue\n\t\t}\n\t\ti := strings")],
- "M126-choice-types-sorted": [("modelbuild.go", "\t\t\tm.choices[basePath] = codes\n", "\t\t\tm.choices[basePath] = slices.Sorted(slices.Values(codes))\n")],
+ "M125-slices-as-children": [("modelbuild.go", "\tif isSlice(e) {\n\t\treturn nil\n\t}\n\ti := strings", "\tif false {\n\t\treturn nil\n\t}\n\ti := strings")],
+ "M126-choice-types-sorted": [("modelbuild.go", "\tm.choices[basePath] = codes\n", "\tm.choices[basePath] = slices.Sorted(slices.Values(codes))\n")],
  "M127-content-reference-hash-form-only": [("modelbuild.go", "from, to, ok := strings.Cut(e.ContentReference, \"#\")", "to, ok := strings.CutPrefix(e.ContentReference, \"#\")\n\t\t\tfrom := \"\"")],
- "M128-content-reference-keeps-the-url": [("modelbuild.go", "\t\t\tm.elsewhere[e.Path] = to\n", "\t\t\tm.elsewhere[e.Path] = e.ContentReference\n\t\t\t_ = to\n")],
- "M129-targets-not-deduplicated": [("modelbuild.go", "\t\t\t\t\tif !slices.Contains(out, tt) {", "\t\t\t\t\tif true {")],
+ "M128-content-reference-keeps-the-url": [("modelbuild.go", "m.elsewhere[e.Path] = to\n", "m.elsewhere[e.Path] = e.ContentReference\n_ = to\n")],
+ "M129-targets-not-deduplicated": [("modelbuild.go", "\t\t\tif !slices.Contains(out, tt) {", "\t\t\tif true {")],
  "M130-targets-by-url-segment": [("modelbuild.go", "\tb.targets[profile] = sd.Type\n\treturn sd.Type, nil", "\tt := profile[strings.LastIndex(profile, \"/\")+1:]\n\tb.targets[profile] = t\n\treturn t, nil")],
- "M131-typeof-takes-one-of-several": [("modelbuild.go", "\t\tif len(codes) == 1 {\n\t\t\tm.pathType[e.Path] = codes[0]", "\t\tif len(codes) >= 1 {\n\t\t\tm.pathType[e.Path] = codes[0]")],
+ "M131-typeof-takes-one-of-several": [("modelbuild.go", "\tif len(codes) == 1 {\n\t\tm.pathType[e.Path] = codes[0]", "\tif len(codes) >= 1 {\n\t\tm.pathType[e.Path] = codes[0]")],
  "M132-variant-without-capital": [("modelbuild.go", "variant := basePath + upperFirst(code)", "variant := basePath + code")],
  "M133-primitive-value-has-a-fhir-type": [("modelbuild.go", "\tif d.doc.Kind == kindPrimitive {\n\t\troot, _, _", "\tif false {\n\t\troot, _, _")],
- "M134-fhir-type-of-several-types": [("modelbuild.go", "\t\tif len(e.Type) == 1 {\n\t\t\tb.addFHIRType(d, e, e.Path)", "\t\tif len(e.Type) >= 1 {\n\t\t\tb.addFHIRType(d, e, e.Path)")],
+ "M134-fhir-type-of-several-types": [("modelbuild.go", "\tif len(e.Type) == 1 {\n\t\tp.b.addFHIRType(p.d, e, e.Path)", "\tif len(e.Type) >= 1 {\n\t\tp.b.addFHIRType(p.d, e, e.Path)")],
  "M135-fhir-type-extension-url-not-checked": [("modelbuild.go", "if x.URL == urlFHIRTypeExtension && x.ValueURL != \"\" {", "if x.ValueURL != \"\" {")],
- "M136-primitive-own-elements-dropped": [("modelbuild.go", "\t\tparent, name := e.Path[:i], e.Path[i+1:]\n", "\t\tparent, name := e.Path[:i], e.Path[i+1:]\n\t\tif d.doc.Kind == kindPrimitive {\n\t\t\tcontinue\n\t\t}\n")],
+ "M136-primitive-own-elements-dropped": [("modelbuild.go", "\tparent, name := e.Path[:i], e.Path[i+1:]\n", "\tparent, name := e.Path[:i], e.Path[i+1:]\n\tif p.d.doc.Kind == kindPrimitive {\n\t\treturn nil\n\t}\n")],
  "M137-fhir-version-empty": [("modelbuild.go", "version:   c.set.lock.FHIRVersion,", "version:   \"\",")],
  "M138-cardinality-unbounded-as-one": [("modelbuild.go", "return int32(*e.Min), Unbounded, nil", "return int32(*e.Min), 1, nil")],
- "M139-cardinality-without-variants": [("modelbuild.go", "\t\t\t\tif err := add(variant); err != nil {\n\t\t\t\t\treturn err\n\t\t\t\t}\n", "")],
- "M140-cardinality-without-choice-base": [("modelbuild.go", "\t\t\tif err := add(basePath); err != nil {\n\t\t\t\treturn err\n\t\t\t}\n", "")],
+ "M139-cardinality-without-variants": [("modelbuild.go", "\t\tif err := p.claim(e, variant, lo, hi); err != nil {\n\t\t\treturn err\n\t\t}\n", "")],
+ "M140-cardinality-without-choice-base": [("modelbuild.go", "\tif err := p.claim(e, basePath, lo, hi); err != nil {\n\t\treturn err\n\t}\n", "")],
  "M141-cardinality-min-max-swapped": [("modelbuild.go", "m.card[path] = cardinality{lo, hi}", "m.card[path] = cardinality{hi, lo}")],
  "M142-two-definitions-of-a-type-tolerated": [("modelbuild.go", "\t\t\treturn nil, fmt.Errorf(\"type %q is defined by more than one structure definition (%s and %s)\", d.Type, prev.url, k.url)", "\t\t\t_ = prev\n\t\t\tcontinue")],
  "M143-unresolved-type-definition-tolerated": [("modelbuild.go", "\t\t\t\t\treturn nil, fmt.Errorf(\"%s: the definition of type %q is unresolved (%s): no type can be taken from it\", k.url, d.Type, explainTrace(g.dec.trace))", "\t\t\t\t\t_ = d")],
- "M144-type-inheritance-cycle-tolerated": [("modelbuild.go", "\t\t\t\treturn nil, fmt.Errorf(\"inheritance cycle through type %s: %s\", t, strings.Join(append(chain, t), \" -> \"))", "\t\t\t\tbreak")],
- "M145-path-outside-its-type-tolerated": [("modelbuild.go", "\t\tif top != typeName {", "\t\tif _ = top; false {")],
- "M146-repeated-path-tolerated": [("modelbuild.go", "\t\tif seen[e.Path] {", "\t\tif false {")],
+ "M144-type-inheritance-cycle-tolerated": [("modelbuild.go", "\t\t\t\treturn fmt.Errorf(\"inheritance cycle through type %s: %s\", t, strings.Join(append(chain, t), \" -> \"))", "\t\t\t\tbreak")],
+ "M145-path-outside-its-type-tolerated": [("modelbuild.go", "\tif top != p.typeName {", "\tif _ = top; false {")],
+ "M146-repeated-path-tolerated": [("modelbuild.go", "\tif p.seen[e.Path] {", "\tif false {")],
  "M147-unresolved-base-definition-tolerated": [("modelbuild.go", "\t\t\t\treturn nil, fmt.Errorf(\"%s: type %s: base definition %s does not resolve: %w\", d.cand.pkgID, name, d.doc.BaseDefinition, err)", "\t\t\t\tcontinue")],
- "M148-content-reference-without-fragment-tolerated": [("modelbuild.go", "\t\t\tif !ok || to == \"\" {", "\t\t\tif false && (!ok || to == \"\") {")],
- "M149-max-not-a-count-tolerated": [("modelbuild.go", "\tif err != nil || n < 0 || n > 1<<30 {", "\tif false {")],
+ "M148-content-reference-without-fragment-tolerated": [("modelbuild.go", "\tif !ok || to == \"\" {", "\tif false && (!ok || to == \"\") {")],
+ "M149-max-not-a-count-tolerated": [("modelbuild.go", "\tif err != nil || n64 < 0 || n64 > 1<<30 {", "\tif false {")],
  "M150-min-out-of-range-tolerated": [("modelbuild.go", "\tif *e.Min < 0 || *e.Min > 1<<30 {", "\tif false {")],
  "M151-types-shares-its-slice": [("model.go", "return append([]string(nil), m.names...)", "return m.names")],
  "M152-unresolved-target-profile-tolerated": [("modelbuild.go", "\tcd, err := b.c.pick(nil, typeStructureDefinition, cn)\n\tif err != nil {\n\t\treturn \"\", err\n\t}\n\tsd := b.docs[cd].sd", "\tcd, err := b.c.pick(nil, typeStructureDefinition, cn)\n\tif err != nil {\n\t\treturn \"\", nil\n\t}\n\tsd := b.docs[cd].sd")],
- "M153-variant-targets-of-all-types": [("modelbuild.go", "rs, err := refsOf(func(x string) bool { return x == code })", "rs, err := refsOf(func(x string) bool { return true })")],
- "M154-choice-type-repeated": [("modelbuild.go", "\t\t\tif !slices.Contains(codes, t.Code) {", "\t\t\tif true {")],
+ "M153-variant-targets-of-all-types": [("modelbuild.go", "rs, err := p.refsOf(e, func(x string) bool { return x == code })", "rs, err := p.refsOf(e, func(x string) bool { return true })")],
+ "M154-choice-type-repeated": [("modelbuild.go", "\t\tif !slices.Contains(codes, t.Code) {", "\t\tif true {")],
  "M155-children-in-reverse-order": [("modelbuild.go", "m.children[parent] = append(m.children[parent], name)", "m.children[parent] = append([]string{name}, m.children[parent]...)")],
- "M156-type-without-code-tolerated": [("modelbuild.go", "\t\t\t\treturn fmt.Errorf(\"%s: %q: a type has no code\", where, e.Path)", "\t\t\t\tcontinue")],
+ "M156-type-without-code-tolerated": [("modelbuild.go", "\t\t\treturn nil, fmt.Errorf(\"%s: %q: a type has no code\", where, e.Path)", "\t\t\tcontinue")],
  "M157-model-guard-fhir-name-in-modelbuild": [("modelbuild.go", "// definesType informa si", "var leaked = \"SimpleQuantity\"\n\n// definesType informa si")],
  "M158-model-guard-json-tag-without-source": [("modelbuild.go", "Min              *int   `json:\"min\"`", "Min              *int   `json:\"minimum\"`")],
  # Plan 003, code review ronda 1: M1 (fallar cerrado ante snapshots incoherentes), B2
  # y M2 (el oráculo independiente scripts/model_oracle.py sobre los núcleos).
- "M159-content-reference-url-not-checked": [("modelbuild.go", "\t\t\tif from != \"\" {", "\t\t\tif false {")],
- "M160-content-reference-target-not-checked": [("modelbuild.go", "\t\t\tif !seen[to] {", "\t\t\tif false {")],
+ "M159-content-reference-url-not-checked": [("modelbuild.go", "\tif from != \"\" {", "\tif false {")],
+ "M160-content-reference-target-not-checked": [("modelbuild.go", "\tif !p.seen[to] {", "\tif false {")],
  "M161-type-code-not-checked": [("modelbuild.go", "if _, ok := b.defs[t.Code]; !ok && !b.system[t.Code] {", "if false {")],
  "M162-system-type-codes-rejected": [("modelbuild.go", "if _, ok := b.defs[t.Code]; !ok && !b.system[t.Code] {", "if _, ok := b.defs[t.Code]; !ok {")],
- "M163-choice-variant-collision-tolerated": [("modelbuild.go", "\t\t\t\tif seen[variant] {", "\t\t\t\tif false {")],
- "M164-element-without-type-tolerated": [("modelbuild.go", "\t\t\treturn fmt.Errorf(\"%s: %q has neither a type nor a content reference\", where, e.Path)", "\t\t\tcontinue")],
- "M165-choice-without-types-tolerated": [("modelbuild.go", "\t\t\t\treturn fmt.Errorf(\"%s: %q: the choice element has no types\", where, e.Path)", "\t\t\t\tcontinue")],
+ "M163-choice-variant-collision-tolerated": [("modelbuild.go", "\t\tif p.seen[variant] {", "\t\tif false {")],
+ "M164-element-without-type-tolerated": [("modelbuild.go", "\t\treturn fmt.Errorf(\"%s: %q has neither a type nor a content reference\", where, e.Path)", "\t\treturn nil")],
+ "M165-choice-without-types-tolerated": [("modelbuild.go", "\t\t\treturn fmt.Errorf(\"%s: %q: the choice element has no types\", where, e.Path)", "\t\t\treturn nil")],
  "M166-absent-cardinality-tolerated": [("modelbuild.go", "\t\treturn 0, 0, errors.New(\"min or max is absent (sdf-3)\")", "\t\t_ = errors.New\n\t\treturn 0, 0, nil")],
  "M167-min-above-max-tolerated": [("modelbuild.go", "\tif *e.Min > n {", "\tif false {")],
- "M168-missing-root-tolerated": [("modelbuild.go", "\tif !seen[typeName] {", "\tif false {")],
- "M169-orphan-path-tolerated": [("modelbuild.go", "\t\tif !seen[parent] {", "\t\tif false {")],
- "M170-slice-cardinality-not-checked": [("modelbuild.go", "\t\tlo, hi, err := cardinalityOf(e)\n\t\tif err != nil {\n\t\t\treturn fmt.Errorf(\"%s: %q: %w\", where, e.Path, err)\n\t\t}\n\t\tif isSlice(e) {\n\t\t\tcontinue\n\t\t}\n", "\t\tif isSlice(e) {\n\t\t\tcontinue\n\t\t}\n\t\tlo, hi, err := cardinalityOf(e)\n\t\tif err != nil {\n\t\t\treturn fmt.Errorf(\"%s: %q: %w\", where, e.Path, err)\n\t\t}\n")],
+ "M168-missing-root-tolerated": [("modelbuild.go", "\tif !p.seen[typeName] {", "\tif false {")],
+ "M169-orphan-path-tolerated": [("modelbuild.go", "\tif !p.seen[parent] {", "\tif false {")],
+ "M170-slice-cardinality-not-checked": [("modelbuild.go", "\tlo, hi, err := cardinalityOf(e)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"%s: %q: %w\", where, e.Path, err)\n\t}\n\tif isSlice(e) {\n\t\treturn nil\n\t}\n", "\tif isSlice(e) {\n\t\treturn nil\n\t}\n\tlo, hi, err := cardinalityOf(e)\n\tif err != nil {\n\t\treturn fmt.Errorf(\"%s: %q: %w\", where, e.Path, err)\n\t}\n")],
  "M171-base-definition-without-derivation-is-a-type": [("modelbuild.go", "(d.Derivation == \"\" && d.BaseDefinition == \"\")", "d.Derivation == \"\"")],
  # M2: las que sobrevivían a la ronda 1 (D y E del revisor) y sus vecinas.
- "M172-reference-element-targets-reversed": [("modelbuild.go", "\t\tif len(rs) > 0 {\n\t\t\tm.refs[e.Path] = rs\n\t\t}", "\t\tif len(rs) > 0 {\n\t\t\tif strings.HasPrefix(codes[0], \"Codeable\") {\n\t\t\t\tslices.Reverse(rs)\n\t\t\t}\n\t\t\tm.refs[e.Path] = rs\n\t\t}")],
- "M173-abstract-type-unbounded-as-one": [("modelbuild.go", "\t\tadd := func(path string) error {", "\t\tif d.doc.Abstract && hi == Unbounded {\n\t\t\thi = 1\n\t\t}\n\t\tadd := func(path string) error {")],
- "M174-variant-targets-reversed": [("modelbuild.go", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tm.refs[variant] = rs\n\t\t\t\t}", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tslices.Reverse(rs)\n\t\t\t\t\tm.refs[variant] = rs\n\t\t\t\t}")],
- "M175-variant-targets-truncated": [("modelbuild.go", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tm.refs[variant] = rs\n\t\t\t\t}", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tm.refs[variant] = rs[:1]\n\t\t\t\t}")],
- "M176-element-targets-truncated": [("modelbuild.go", "\t\t\tm.refs[e.Path] = rs\n", "\t\t\tm.refs[e.Path] = rs[:1]\n")],
+ "M172-reference-element-targets-reversed": [("modelbuild.go", "\tif len(rs) > 0 {\n\t\tm.refs[e.Path] = rs\n\t}", "\tif len(rs) > 0 {\n\t\tif strings.HasPrefix(codes[0], \"Codeable\") {\n\t\t\tslices.Reverse(rs)\n\t\t}\n\t\tm.refs[e.Path] = rs\n\t}")],
+ "M173-abstract-type-unbounded-as-one": [("modelbuild.go", "\tif e.ContentReference != \"\" {\n\t\treturn p.addContentReference(e, lo, hi)", "\tif p.d.doc.Abstract && hi == Unbounded {\n\t\thi = 1\n\t}\n\tif e.ContentReference != \"\" {\n\t\treturn p.addContentReference(e, lo, hi)")],
+ "M174-variant-targets-reversed": [("modelbuild.go", "\t\tif len(rs) > 0 {\n\t\t\tm.refs[variant] = rs\n\t\t}", "\t\tif len(rs) > 0 {\n\t\t\tslices.Reverse(rs)\n\t\t\tm.refs[variant] = rs\n\t\t}")],
+ "M175-variant-targets-truncated": [("modelbuild.go", "\t\tif len(rs) > 0 {\n\t\t\tm.refs[variant] = rs\n\t\t}", "\t\tif len(rs) > 0 {\n\t\t\tm.refs[variant] = rs[:1]\n\t\t}")],
+ "M176-element-targets-truncated": [("modelbuild.go", "\t\tm.refs[e.Path] = rs\n", "\t\tm.refs[e.Path] = rs[:1]\n")],
  "M177-fhir-type-of-abstract-types-dropped": [("modelbuild.go", "func (b *modelBuilder) addFHIRType(d *typeDef, e elementDoc, path string) {\n", "func (b *modelBuilder) addFHIRType(d *typeDef, e elementDoc, path string) {\n\tif d.doc.Abstract {\n\t\treturn\n\t}\n")],
- "M178-abstract-type-cardinality-dropped": [("modelbuild.go", "\t\t\tm.card[path] = cardinality{lo, hi}\n\t\t\tif e.IsSummary {", "\t\t\tif !d.doc.Abstract {\n\t\t\t\tm.card[path] = cardinality{lo, hi}\n\t\t\t}\n\t\t\tif e.IsSummary {")],
- "M179-element-without-id-tolerated": [("modelbuild.go", "\t\tif e.ID == \"\" {", "\t\tif false {")],
- "M180-slice-mark-in-path-tolerated": [("modelbuild.go", "\t\tif strings.Contains(e.Path, \":\") {", "\t\tif false {")],
- "M181-content-reference-with-type-tolerated": [("modelbuild.go", "\t\t\tif len(e.Type) > 0 {\n\t\t\t\treturn fmt.Errorf(\"%s: %q: the element has a content reference", "\t\t\tif false {\n\t\t\t\treturn fmt.Errorf(\"%s: %q: the element has a content reference")],
- "M182-content-reference-chain-tolerated": [("modelbuild.go", "\t\t\tif crs[to] {", "\t\t\tif false {")],
- "M183-element-and-its-choice-tolerated": [("modelbuild.go", "\t\t\tif seen[basePath] {", "\t\t\tif false {")],
+ "M178-abstract-type-cardinality-dropped": [("modelbuild.go", "\tm.card[path] = cardinality{lo, hi}\n\tif e.IsSummary {", "\tif !p.d.doc.Abstract {\n\t\tm.card[path] = cardinality{lo, hi}\n\t}\n\tif e.IsSummary {")],
+ "M179-element-without-id-tolerated": [("modelbuild.go", "\tif e.ID == \"\" {", "\tif false {")],
+ "M180-slice-mark-in-path-tolerated": [("modelbuild.go", "\tif strings.Contains(e.Path, \":\") {", "\tif false {")],
+ "M181-content-reference-with-type-tolerated": [("modelbuild.go", "\tif len(e.Type) > 0 {\n\t\treturn fmt.Errorf(\"%s: %q: the element has a content reference", "\tif false {\n\t\treturn fmt.Errorf(\"%s: %q: the element has a content reference")],
+ "M182-content-reference-chain-tolerated": [("modelbuild.go", "\tif p.crs[to] {", "\tif false {")],
+ "M183-element-and-its-choice-tolerated": [("modelbuild.go", "\tif p.seen[basePath] {", "\tif false {")],
  "M184-system-types-from-any-package": [("modelbuild.go", "if cd.pkgID != c.core {", "if false {")],
  "M185-system-types-from-any-kind": [("modelbuild.go", "if !definesType(d) || d.Kind != kindPrimitive {", "if !definesType(d) {")],
- "M186-content-reference-version-not-cut": [("modelbuild.go", "if u, _, _ := strings.Cut(from, \"|\"); u != d.url {", "if u := from; u != d.url {")],
- "M187-single-type-choice-fhir-type-on-base": [("modelbuild.go", "b.addFHIRType(d, e, basePath+upperFirst(codes[0]))", "b.addFHIRType(d, e, basePath)")],
+ "M186-content-reference-version-not-cut": [("modelbuild.go", "if u, _, _ := strings.Cut(from, \"|\"); u != p.d.url {", "if u := from; u != p.d.url {")],
+ "M187-single-type-choice-fhir-type-on-base": [("modelbuild.go", "p.b.addFHIRType(p.d, e, basePath+upperFirst(codes[0]))", "p.b.addFHIRType(p.d, e, basePath)")],
  "M188-slice-detection-disabled": [("modelbuild.go", "func isSlice(e elementDoc) bool { return strings.Contains(e.ID, \":\") }", "func isSlice(e elementDoc) bool { return false }")],
- "M189-choice-path-collision-tolerated": [("modelbuild.go", "if from, dup := claimed[path]; dup {", "if from, dup := claimed[path]; false && dup {")],
+ "M189-choice-path-collision-tolerated": [("modelbuild.go", "if from, dup := p.claimed[path]; dup {", "if from, dup := p.claimed[path]; false && dup {")],
  "M190-id-unrelated-to-path-tolerated": [("modelbuild.go", "if stripSliceNames(e.ID) != e.Path {", "if false {")],
- "M191-slice-without-base-tolerated": [("modelbuild.go", "if !ids[sliceParentID(e.ID)] {", "if false {")],
+ "M191-slice-without-base-tolerated": [("modelbuild.go", "if !p.ids[sliceParentID(e.ID)] {", "if false {")],
  "M192-slice-descendant-checked-against-base-path": [("modelbuild.go", "\t\treturn id[:last+end]\n", "\t\treturn id[:last]\n")],
  "M193-system-type-in-choice-or-several-tolerated": [("modelbuild.go", "!ok && (len(e.Type) > 1 || strings.HasSuffix(name, choiceSuffix)) {", "!ok && false {")],
  "M194-system-type-among-several-tolerated": [("modelbuild.go", "!ok && (len(e.Type) > 1 || strings.HasSuffix(name, choiceSuffix)) {", "!ok && strings.HasSuffix(name, choiceSuffix) {")],
  "M195-system-type-in-choice-tolerated": [("modelbuild.go", "!ok && (len(e.Type) > 1 || strings.HasSuffix(name, choiceSuffix)) {", "!ok && len(e.Type) > 1 {")],
- "M196-content-reference-children-tolerated": [("modelbuild.go", "if i >= 0 && crs[e.Path[:i]] {", "if false {")],
+ "M196-content-reference-children-tolerated": [("modelbuild.go", "if i >= 0 && p.crs[e.Path[:i]] {", "if false {")],
  "M197-overridden-core-primitive-tolerated": [("modelbuild.go", "if g.dec.winner != cd {", "if false {")],
  # Plan 004: el normalizador (reglas 1 a 9 de §3.1, D2, D6). Los P-07 a P-12 corren
  # además el oráculo de paridad con models (TestNormalizerParity).
  "M198-is-primitive-never": [("modelbuild.go", "primitive: d.doc.Kind == kindPrimitive}", "primitive: false}")],
  "M199-is-primitive-any-non-logical": [("modelbuild.go", "primitive: d.doc.Kind == kindPrimitive}", "primitive: d.doc.Kind != kindLogical}")],
- "M200-lone-low-surrogate-accepted": [("normscan.go", "\t\t\t\tcase r >= 0xDC00 && r <= 0xDFFF:", "\t\t\t\tcase false:")],
- "M201-lone-high-surrogate-accepted": [("normscan.go", "\t\t\t\t\ts.fail(KindSyntax, p-6, \"high surrogate without its low surrogate\")\n\t\t\t\t\treturn\n", "\t\t\t\t\tcontinue\n")],
+ "M200-lone-low-surrogate-accepted": [("normscan.go", "\t\tcase r >= 0xDC00 && r <= 0xDFFF:", "\t\tcase false:")],
+ "M201-lone-high-surrogate-accepted": [("normscan.go", "\t\t\ts.fail(KindSyntax, p-6, \"high surrogate without its low surrogate\")\n\t\t\treturn 0, false\n", "\t\t\treturn p, true\n")],
  "M202-invalid-utf8-accepted": [("normscan.go", "if r == utf8.RuneError && w <= 1 {", "if r == utf8.RuneError && w <= 1 && false {")],
  "M203-control-character-accepted": [("normscan.go", "\t\tcase c < 0x20:\n\t\t\ts.fail(KindSyntax, p, \"control character", "\t\tcase false:\n\t\t\ts.fail(KindSyntax, p, \"control character")],
  "M204-leading-zero-accepted": [("normscan.go", "\tcase p < len(d) && d[p] == '0':\n\t\tp++\n", "\tcase p < len(d) && d[p] == '0':\n\t\tfor p < len(d) && d[p] >= '0' && d[p] <= '9' {\n\t\t\tp++\n\t\t}\n")],
  "M205-trailing-data-accepted": [("normscan.go", "\tif s.pos != len(s.data) {", "\tif false {")],
- "M206-exponent-without-digits-accepted": [("normscan.go", "\t\tif p == q {\n\t\t\ts.fail(KindSyntax, start, \"invalid number: no digits in the exponent\")", "\t\tif p == q && false {\n\t\t\ts.fail(KindSyntax, start, \"invalid number: no digits in the exponent\")")],
+ "M206-exponent-without-digits-accepted": [("normscan.go", "\t\tif p == q {\n\t\t\treturn p, \"invalid number: no digits in the exponent\"", "\t\tif p == q && false {\n\t\t\treturn p, \"invalid number: no digits in the exponent\"")],
  "M207-object-depth-off-by-one": [("normscan.go", "\tif depth > s.maxDepth {\n\t\treturn s.fail(KindTooDeep, start, \"nesting is deeper than %d\", s.maxDepth)\n\t}\n\ts.pos++\n\tn := s.newNode(kObject, start)", "\tif depth >= s.maxDepth {\n\t\treturn s.fail(KindTooDeep, start, \"nesting is deeper than %d\", s.maxDepth)\n\t}\n\ts.pos++\n\tn := s.newNode(kObject, start)")],
  "M208-array-depth-not-limited": [("normscan.go", "\tif depth > s.maxDepth {\n\t\treturn s.fail(KindTooDeep, start, \"nesting is deeper than %d\", s.maxDepth)\n\t}\n\ts.pos++\n\tn := s.newNode(kArray, start)", "\tif false {\n\t\treturn s.fail(KindTooDeep, start, \"nesting is deeper than %d\", s.maxDepth)\n\t}\n\ts.pos++\n\tn := s.newNode(kArray, start)")],
  "M209-syntax-path-keeps-popped-members": [("normscan.go", "\t\ts.stack = s.stack[:len(s.stack)-1]\n\t\ts.nodes[c].key, s.nodes[c].keyEnd", "\t\ts.nodes[c].key, s.nodes[c].keyEnd")],
@@ -294,16 +296,16 @@ muts = {
  "M224-duplicate-property-tolerated": [("normwalk.go", "\t\tif *slot != 0 {", "\t\tif false {")],
  "M225-underscore-on-non-primitive-tolerated": [("normwalk.go", "\tif um != 0 && v.kind != vkPrimitive {", "\tif false {")],
  "M226-unknown-property-tolerated": [("normwalk.go", "\t\t\tw.report(KindUnknownProperty, ms[i].n, string(appendPropertyPath(nil, string(w.keyBytes(ms[i].n)))), \"the type has no such element\")", "\t\t\t_ = ms")],
- "M227-underscore-padding-omitted": [("normwalk.go", "\t\t\tfor ; c != 0; c = w.nodes[c].next {\n\t\t\t\tw.out = append(w.out, \",null\"...) // el error", "\t\t\tfor ; c != 0 && false; c = w.nodes[c].next {\n\t\t\t\tw.out = append(w.out, \",null\"...) // el error")],
- "M227d-suffix-null-reported-before-underscore-errors": [("normwalk.go", "\t\t\tfor ; c != 0; c = w.nodes[c].next {\n\t\t\t\tw.out = append(w.out, \",null\"...)", "\t\t\tfor ; c != 0; c = w.nodes[c].next {\n\t\t\t\tif w.nodes[c].kind == kNull {\n\t\t\t\t\tw.report(KindNull, c, \"\", \"x\")\n\t\t\t\t}\n\t\t\t\tw.out = append(w.out, \",null\"...)")],
- "M227b-value-padding-omitted": [("normwalk.go", "\t\t\tfor i := nu; i < nx && !w.trunc; i++ {", "\t\t\tfor i := nu; i < 0 && !w.trunc; i++ {")],
+ "M227-underscore-padding-omitted": [("normwalk.go", "\t\tfor ; c != 0; c = w.nodes[c].next {\n\t\t\tw.out = append(w.out, \",null\"...) // el error", "\t\tfor ; c != 0 && false; c = w.nodes[c].next {\n\t\t\tw.out = append(w.out, \",null\"...) // el error")],
+ "M227d-suffix-null-reported-before-underscore-errors": [("normwalk.go", "\t\tfor ; c != 0; c = w.nodes[c].next {\n\t\t\tw.out = append(w.out, \",null\"...)", "\t\tfor ; c != 0; c = w.nodes[c].next {\n\t\t\tif w.nodes[c].kind == kNull {\n\t\t\t\tw.report(KindNull, c, \"\", \"x\")\n\t\t\t}\n\t\t\tw.out = append(w.out, \",null\"...)")],
+ "M227b-value-padding-omitted": [("normwalk.go", "\t\tfor i := nu; i < nx && !w.trunc; i++ {", "\t\tfor i := nu; i < 0 && !w.trunc; i++ {")],
  "M227c-filtered-suffix-not-null": [("normwalk.go", "\t\tps[i].null = true // el sufijo inferido del valor más corto", "\t\t_ = i // el sufijo inferido del valor más corto")],
  "M228-array-not-required-for-repeating": [("normwalk.go", "\tif nd.kind != kArray {\n\t\tw.report(KindWrongShape, n, \"\", \"the element repeats: an array is expected\")", "\tif false {\n\t\tw.report(KindWrongShape, n, \"\", \"the element repeats: an array is expected\")")],
  "M229-empty-array-tolerated": [("normwalk.go", "\tif nd.first == 0 {\n\t\tw.report(KindEmpty, n, \"\", \"an empty array is not allowed\")", "\tif false {\n\t\tw.report(KindEmpty, n, \"\", \"an empty array is not allowed\")")],
  "M230-empty-object-tolerated": [("normwalk.go", "\tcase nd.first == 0:\n\t\tw.report(KindEmpty, n, \"\", \"an empty object is not allowed\")", "\tcase false:\n\t\tw.report(KindEmpty, n, \"\", \"an empty object is not allowed\")")],
  "M231-null-object-is-a-shape-error": [("normwalk.go", "\tcase nd.kind == kNull:\n\t\tw.report(KindNull, n, \"\", \"null is not allowed here\")\n\tcase nd.kind != kObject:", "\tcase false:\n\t\tw.report(KindNull, n, \"\", \"null is not allowed here\")\n\tcase nd.kind != kObject:")],
- "M232-null-without-underscore-partner-tolerated": [("normwalk.go", "\t\t\t}\n\t\t\tw.setIdx(i)\n\t\t\tif w.nodes[c].kind == kNull {\n\t\t\t\tif p == 0 || w.nodes[p].kind == kNull {", "\t\t\t}\n\t\t\tw.setIdx(i)\n\t\t\tif w.nodes[c].kind == kNull {\n\t\t\t\tif false {")],
- "M233-null-without-value-partner-tolerated": [("normwalk.go", "\t\t\t\tif xm == 0 || i >= nx {\n\t\t\t\t\tw.report(KindNull, c, \"\", \"null needs a value in the value array at the same position\")\n\t\t\t\t} else {", "\t\t\t\tif false {\n\t\t\t\t\tw.report(KindNull, c, \"\", \"null needs a value in the value array at the same position\")\n\t\t\t\t} else {")],
+ "M232-null-without-underscore-partner-tolerated": [("normwalk.go", "\t\t}\n\t\tw.setIdx(i)\n\t\tif w.nodes[c].kind == kNull {\n\t\t\tif p == 0 || w.nodes[p].kind == kNull {", "\t\t}\n\t\tw.setIdx(i)\n\t\tif w.nodes[c].kind == kNull {\n\t\t\tif false {")],
+ "M233-null-without-value-partner-tolerated": [("normwalk.go", "\t\t\tif xm == 0 || i >= nx {\n\t\t\t\tw.report(KindNull, c, \"\", \"null needs a value in the value array at the same position\")\n\t\t\t} else {", "\t\t\tif false {\n\t\t\t\tw.report(KindNull, c, \"\", \"null needs a value in the value array at the same position\")\n\t\t\t} else {")],
  "M234-root-path-missing": [("normwalk.go", "\t\tw.push(rt)\n\t\tdefer w.pop()\n\t}", "\t\t_ = rt\n\t}")],
  "M235-array-index-not-in-the-path": [("normwalk.go", "\t\tw.setIdx(i)\n\t\tif w.occurrence(v, c, mand) {", "\t\t_ = i\n\t\tif w.occurrence(v, c, mand) {")],
  "M236-any-type-is-a-resource": [("normwalk.go", "!w.m.IsResource(rt) || (slot != \"\" && !w.m.IsSubtype(rt, slot))", "false")],
@@ -363,26 +365,26 @@ muts = {
  "P-15-oracle-ignores-models-failures": [("parity/normparity_test.go", "\tcase mr.err != nil:\n\t\trule := \"normalize accepts\"", "\tcase false:\n\t\trule := \"normalize accepts\"")],
  "P-16-oracle-does-not-detect-repaired-text": [("parity/normparity_test.go", "\t\tif bytes.Contains(mr.out, []byte(\"\\ufffd\")) {", "\t\tif false {")],
  "P-17-oracle-counts-no-unknown-resource": [("parity/normparity_test.go", "\tcase hasKind(list, fhirpkg.KindUnknownResourceType):", "\tcase false:")],
- "P-01-classified-difference-disappears": [("modelbuild.go", "\t\t\t\t\tif !slices.Contains(out, tt) {", "\t\t\t\t\tif true {")],
+ "P-01-classified-difference-disappears": [("modelbuild.go", "\t\t\tif !slices.Contains(out, tt) {", "\t\t\tif true {")],
  "P-02-children-order-differs-from-models": [("modelbuild.go", "m.children[parent] = append(m.children[parent], name)", "m.children[parent] = append([]string{name}, m.children[parent]...)")],
  "P-03-fhir-type-always-id": [("modelbuild.go", "\t\t\tb.m.fhirType[path] = x.ValueURL\n", "\t\t\tb.m.fhirType[path] = \"id\"\n")],
- "P-04-abstract-type-elements-dropped": [("modelbuild.go", "\t\tparent, name := e.Path[:i], e.Path[i+1:]\n", "\t\tparent, name := e.Path[:i], e.Path[i+1:]\n\t\tif d.doc.Abstract {\n\t\t\tcontinue\n\t\t}\n")],
- "P-05-choice-variants-lose-their-targets": [("modelbuild.go", "\t\t\t\tif len(rs) > 0 {\n\t\t\t\t\tm.refs[variant] = rs\n\t\t\t\t}", "\t\t\t\t_ = rs")],
- "P-06-nested-backbone-typed-like-models": [("modelbuild.go", "\t\t\tm.pathType[e.Path] = codes[0]\n", "\t\t\tm.pathType[e.Path] = codes[0]\n\t\t\tif codes[0] == \"Element\" {\n\t\t\t\tm.pathType[e.Path] = \"BackboneElement\"\n\t\t\t}\n")],
+ "P-04-abstract-type-elements-dropped": [("modelbuild.go", "\tparent, name := e.Path[:i], e.Path[i+1:]\n", "\tparent, name := e.Path[:i], e.Path[i+1:]\n\tif p.d.doc.Abstract {\n\t\treturn nil\n\t}\n")],
+ "P-05-choice-variants-lose-their-targets": [("modelbuild.go", "\t\tif len(rs) > 0 {\n\t\t\tm.refs[variant] = rs\n\t\t}", "\t\t_ = rs")],
+ "P-06-nested-backbone-typed-like-models": [("modelbuild.go", "\t\tm.pathType[e.Path] = codes[0]\n", "\t\tm.pathType[e.Path] = codes[0]\n\t\tif codes[0] == \"Element\" {\n\t\t\tm.pathType[e.Path] = \"BackboneElement\"\n\t\t}\n")],
 
  # Proyección (plan 005, §5.6)
- "PR-01-summary-ignored-below-the-root": [("projection.go", "m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {", "root && m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {")],
- "PR-02-summary-true-skips-min1": [("projection.go", "m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {", "m.IsSummary(path) || m.IsModifier(path) {")],
- "PR-03-summary-true-skips-modifiers": [("projection.go", "m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {", "m.IsSummary(path) || mandatory(m, path) {")],
- "PR-04-elements-skip-min1": [("projection.go", "mandatory(m, path) || m.IsModifier(path) {\n\t\t\treturn actWhole", "m.IsModifier(path) {\n\t\t\treturn actWhole")],
- "PR-05-elements-skip-modifiers": [("projection.go", "mandatory(m, path) || m.IsModifier(path) {\n\t\t\treturn actWhole", "mandatory(m, path) {\n\t\t\treturn actWhole")],
+ "PR-01-summary-ignored-below-the-root": [("projection.go", "if summaryKeeps(m, path) {", "if root && m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path) {")],
+ "PR-02-summary-true-skips-min1": [("projection.go", "return m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path)\n", "return m.IsSummary(path) || m.IsModifier(path)\n")],
+ "PR-03-summary-true-skips-modifiers": [("projection.go", "return m.IsSummary(path) || mandatory(m, path) || m.IsModifier(path)\n", "return m.IsSummary(path) || mandatory(m, path)\n")],
+ "PR-04-elements-skip-min1": [("projection.go", "\t\tmandatory(m, path) || m.IsModifier(path)\n}", "\t\tm.IsModifier(path)\n}")],
+ "PR-05-elements-skip-modifiers": [("projection.go", "\t\tmandatory(m, path) || m.IsModifier(path)\n}", "\t\tmandatory(m, path)\n}")],
  "PR-06-elements-skip-id-meta": [("projection.go", "p.mode == SummaryFalse && (fs.name == elemID || fs.name == elemMeta) ||", "")],
  "PR-07-text-skips-text": [("projection.go", "(fs.name == elemText || fs.name == elemID || fs.name == elemMeta)", "(fs.name == elemID || fs.name == elemMeta)")],
  "PR-08-extension-not-copied-whole": [("projection.go", "v.kind == vkObject && v.scope == typeExtension {", "v.kind == vkObject && v.scope == typeExtension && false {")],
  "PR-09-data-keeps-text-of-contained": [("projection.go", "if resLevel && fs.name == elemText {", "if resLevel && root && fs.name == elemText {")],
  "PR-10-data-drops-text-below-the-resource": [("projection.go", "if resLevel && fs.name == elemText {", "if fs.name == elemText {")],
  "PR-11-underscore-array-not-filtered": [("normwalk.go", "um != 0 && w.p.filtersUnderscore() {", "um != 0 && w.p.filtersUnderscore() && false {")],
- "PR-12-underscore-array-dropped": [("normwalk.go", "\tif keptExt > 0 {", "\tif false {")],
+ "PR-12-underscore-array-dropped": [("normwalk.go", "\tif keptExt > 0 {", "\tif keptExt > 0 && false {")],
  "PR-13-null-position-kept": [("normwalk.go", "if p.null && p.ext == nil {", "if false {")],
  "PR-14-empty-container-kept": [("normwalk.go", "if w.object(n, sp, \"\") > 0 {", "if w.object(n, sp, \"\") >= 0 {")],
  "PR-15-dropped-element-not-counted-as-loss": [("projection.go", "\tw.out, *first = w.out[:mark], wasFirst\n\tw.loss()\n\treturn false\n}", "\tw.out, *first = w.out[:mark], wasFirst\n\treturn false\n}")],
@@ -391,12 +393,12 @@ muts = {
  "PR-18-unreferenced-contained-kept": [("projection.go", "case !kept[i]:\n\t\t\tfr.lost = true", "case !kept[i] && false:\n\t\t\tfr.lost = true")],
  "PR-19-tag-always": [("projection.go", "if fr.lost {\n\t\tw.addTag(fr)", "if true {\n\t\tw.addTag(fr)")],
  "PR-20-tag-never": [("projection.go", "if fr.lost {\n\t\tw.addTag(fr)", "if false {\n\t\tw.addTag(fr)")],
- "PR-21-tag-duplicated": [("projection.go", "if sys == systemSubsetted && code == codeSubsetted {\n\t\t\t\treturn", "if sys == systemSubsetted && code == codeSubsetted && false {\n\t\t\t\treturn")],
+ "PR-21-tag-duplicated": [("projection.go", "if sys == systemSubsetted && code == codeSubsetted {\n\t\t\treturn true", "if sys == systemSubsetted && code == codeSubsetted && false {\n\t\t\treturn true")],
  "PR-22-tag-only-at-the-root": [("projection.go", "if fr.lost {\n\t\tw.addTag(fr)", "if fr.lost && fr.parent == nil {\n\t\tw.addTag(fr)")],
  "PR-23-tag-replaces-the-others": [("projection.go", "w.out = slices.Insert(w.out, fr.metaStart+int(s.nodes[arr].end)-1, append([]byte{','}, tag...)...)", "w.out = slices.Insert(w.out, fr.metaStart+int(s.nodes[arr].end)-1, append([]byte{}, tag...)...)")],
  "PR-24-modifier-always-false": [("model.go", "func (m *Model) IsModifier(path string) bool { return m.modifier[path] }", "func (m *Model) IsModifier(path string) bool { return false }")],
- "PR-25-summary-ignores-choice-variants": [("modelbuild.go", "\t\t\tif e.IsSummary {\n\t\t\t\tm.summary[path] = true", "\t\t\tif e.IsSummary && !strings.Contains(e.Path, \"[x]\") {\n\t\t\t\tm.summary[path] = true")],
- "PR-28-mandatory-primitive-underscore-filtered": [("normwalk.go", "w.p != nil && w.copy == 0 && mandatory(w.m, sp.scope+\".\"+fs.name) {", "w.p != nil && w.copy == 0 && mandatory(w.m, sp.scope+\".\"+fs.name) && false {")],
+ "PR-25-summary-ignores-choice-variants": [("modelbuild.go", "\tif e.IsSummary {\n\t\tm.summary[path] = true", "\tif e.IsSummary && !strings.Contains(e.Path, \"[x]\") {\n\t\tm.summary[path] = true")],
+ "PR-28-mandatory-primitive-underscore-filtered": [("normwalk.go", "um != 0 && w.copy == 0 && mandatory(w.m, sp.scope+\".\"+fs.name) {", "um != 0 && w.copy == 0 && mandatory(w.m, sp.scope+\".\"+fs.name) && false {")],
  "PR-36-mandatory-fallback-per-field": [("normwalk.go", "\tif !mand {\n\t\treturn w.element(v, n)", "\tif !mand || w.path[len(w.path)-1].idx >= 0 {\n\t\treturn w.element(v, n)")],
  "PR-31-emptied-mandatory-removed": [("normwalk.go", "\tif !mand {\n\t\treturn w.element(v, n)", "\tif !mand || true {\n\t\treturn w.element(v, n)")],
  "PR-32-canonical-local-not-collected": [("normwalk.go", "(sp.scope == typeReference && v.key == elemReference || v.prim == typeCanonical) {", "(sp.scope == typeReference && v.key == elemReference) {")],
@@ -467,6 +469,67 @@ def save_cache(entries):
     os.makedirs(os.path.dirname(CACHE), exist_ok=True)
     json.dump({"version": CACHE_VERSION, "entries": entries}, open(CACHE, "w"), indent=1, sort_keys=True)
 
+TIMEOUT = int(os.environ.get("MUTATION_TIMEOUT", "900"))
+GRACE = 120  # margen del arnés sobre el -timeout de go test
+
+def run_cmd(cmd, cwd, env, timeout=None):
+    """Como subprocess.run con salida capturada, pero en su propio grupo de procesos:
+    al vencer el plazo se mata todo el grupo (el binario de prueba incluido), para no
+    dejar procesos huérfanos que carguen la máquina y alarguen las demás mutaciones."""
+    p = subprocess.Popen(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, start_new_session=True)
+    try:
+        out, err = p.communicate(timeout=timeout or TIMEOUT + GRACE)
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.communicate()
+        raise
+    return subprocess.CompletedProcess(cmd, p.returncode, out, err)
+
+def passed(cp):
+    """Positive evidence that go test ran and passed: exit 0 and an `ok` line."""
+    return cp.returncode == 0 and re.search(r"^ok\s", cp.stdout, re.M) is not None
+
+def no_verdict(cp):
+    # Sin un `ok` ni una prueba fallida con nombre (p. ej. el sistema mató a go test por
+    # falta de memoria y no dejó salida) no se sabe si la mutación se vio: nunca es `undetected`.
+    tail = (cp.stderr.strip().splitlines() or cp.stdout.strip().splitlines() or ["no output"])[-1]
+    return "go test exited %d without a verdict: %s" % (cp.returncode, tail[:120])
+
+def gotimeout():
+    # El plazo del propio go test (si no, vale 10 min y su pánico se confunde con un fallo).
+    return "-timeout=%ds" % TIMEOUT
+
+def go_timed_out(out):
+    # El pánico del plazo, o el SIGQUIT con que go test mata a un binario que no responde
+    # (p. ej. dormido en un init, antes de que arranque el cronómetro de las pruebas).
+    return "panic: test timed out" in out or "SIGQUIT: quit" in out
+
+def timed_out(secs):
+    # Un plazo vencido no dice nada de la mutación: una prueba correcta pero lenta (máquina
+    # cargada) también lo vence. Por eso no cuenta como detección: queda sin resolver.
+    return {"status": "timeout", "detail": "go test exceeded the %d s limit; the verdict is unknown (rerun with a longer MUTATION_TIMEOUT or less load)" % TIMEOUT, "secs": secs}
+
+def load_hints():
+    # Los oráculos que detectaron cada mutación la última vez (último reporte y caché):
+    # se corren primero, con -failfast; solo si ninguno falla corre todo.
+    hints = {}
+    ev = os.path.join(R, "docs", "evidence")
+    reports = sorted(f for f in os.listdir(ev) if f.endswith("-mutations.md")) if os.path.isdir(ev) else []
+    for report in reports[-6:]:  # los más recientes pisan a los anteriores
+        for line in open(os.path.join(ev, report)):
+            cols = [c.strip() for c in line.split("|")]
+            if len(cols) > 4 and cols[2].startswith("detected") and cols[3] and cols[3] != "timeout":
+                names = [n for n in cols[3].replace("...", "").split(",") if re.fullmatch(r"\s*Test\w+\s*", n)]
+                if names:
+                    hints[cols[1]] = [n.strip() for n in names]
+    for n, c in load_cache().items():
+        by = [x for x in c["result"].get("by", []) if re.fullmatch(r"Test\w+", x)]
+        if by:
+            hints[n] = by
+    return hints
+
+HINTS = {}
+
 PARITY_RUN = "TestProjectionParity|TestComparisonRejects"
 
 def parity_fast(dst, work, env):
@@ -478,17 +541,22 @@ def parity_fast(dst, work, env):
     penv = dict(env, PARITY_CORPUS="fast", PARITY_ORACLES="2")
     start = time.time()
     try:
-        out = subprocess.run(["go", "test", "-failfast", "-count=1", "-run", PARITY_RUN, "./..."],
-                             cwd=os.path.join(dst, "parity"), env=penv, capture_output=True, text=True, timeout=900).stdout
+        cp = run_cmd(["go", "test", gotimeout(), "-failfast", "-count=1", "-run", PARITY_RUN, "./..."],
+                     os.path.join(dst, "parity"), penv)
+        out = cp.stdout
     except subprocess.TimeoutExpired:
-        return ["timeout"], 900, None
+        return [], TIMEOUT, "timeout"
     secs = round(time.time() - start, 1)
+    if go_timed_out(out):
+        return [], secs, "timeout"
     if "[build failed]" in out:
         return [], secs, "parity does not compile: " + out.strip().splitlines()[0][:150]
     if "ORACLE-PROTOCOL-FAILURE" in out:
         m = re.search(r"ORACLE-PROTOCOL-FAILURE: ([^\n]{0,120})", out)
         return [], secs, "oracle protocol failure (not a detection): " + (m.group(1) if m else "")
     by = sorted(set(re.findall(r"^--- FAIL: (\S+)", out, re.M)))
+    if not by and not passed(cp):
+        return [], secs, no_verdict(cp)
     return by, secs, None
 
 def run_oracle_mutation(name, dst, work, env, pk):
@@ -499,11 +567,10 @@ def run_oracle_mutation(name, dst, work, env, pk):
     mutación, no una detección (code review o1, hallazgo 4)."""
     start = time.time()
     script = os.path.join("scripts", "projection_oracle.py")
-    pc = subprocess.run(["python3", "-I", "-m", "py_compile", script], cwd=dst, env=env, capture_output=True, text=True, timeout=300)
+    pc = run_cmd(["python3", "-I", "-m", "py_compile", script], dst, env, 300)
     if pc.returncode != 0:
         return {"status": "error", "detail": "the mutated oracle does not compile: " + (pc.stderr.strip().splitlines() or ["?"])[-1][:150]}
-    st = subprocess.run(["python3", "-I", script, "--self-test", "--packages", pk],
-                        cwd=dst, env=env, capture_output=True, text=True, timeout=900)
+    st = run_cmd(["python3", "-I", script, "--self-test", "--packages", pk], dst, env)
     secs = round(time.time() - start, 1)
     if st.returncode == 0:
         pass
@@ -513,6 +580,8 @@ def run_oracle_mutation(name, dst, work, env, pk):
         tail = (st.stderr.strip().splitlines() or st.stdout.strip().splitlines() or ["?"])[-1]
         return {"status": "error", "detail": "the mutated oracle failed without a self-test assertion: " + tail[:150]}
     pby, psecs, perr = parity_fast(dst, work, env)
+    if perr == "timeout":
+        return timed_out(round(secs + psecs, 1))
     if perr:
         return {"status": "error", "detail": perr}
     if pby:
@@ -521,6 +590,10 @@ def run_oracle_mutation(name, dst, work, env, pk):
 
 def harness_self_check(tmp_root):
     """Un oráculo roto de sintaxis debe dar status error, nunca detected."""
+    # Sin salida útil (go test muerto por el sistema, sin `ok`) no hay veredicto: nunca `undetected`.
+    cp = lambda rc, out: subprocess.CompletedProcess([], rc, out, "")
+    if passed(cp(-9, "")) or passed(cp(1, "ok  \tpkg\t1s\n")) or passed(cp(0, "?   \tpkg\t[no test files]\n")) or not passed(cp(0, "ok  \tpkg\t1s\n")):
+        sys.exit("harness self-check failed: the pass verdict needs exit 0 and an ok line")
     work = tempfile.mkdtemp(prefix="mut-check-", dir=tmp_root)
     try:
         r = run_mutation("O-selfcheck-syntax", [("scripts/projection_oracle.py", "import argparse", "import (")], tmp_root)
@@ -537,8 +610,26 @@ def harness_self_check(tmp_root):
             r = run_mutation("O-selfcheck-" + nm, [("scripts/projection_oracle.py", anchor, repl)], tmp_root)
             if r["status"] != "error":
                 sys.exit("harness self-check failed: an oracle with a %s reply was reported as %r" % (nm, r["status"]))
+        # Una mutación correcta pero lenta (solo duerme) vence el plazo: debe dar
+        # timeout, nunca detected (el plazo se acorta solo para esta comprobación).
+        global TIMEOUT, GRACE
+        saved, TIMEOUT, GRACE = (TIMEOUT, GRACE), 5, 3
+        try:
+            r = run_mutation("S-selfcheck-slow-but-correct", [("fhirnames.go", "package fhirpkg\n", "package fhirpkg\n\nimport \"time\"\n\nfunc init() { time.Sleep(time.Minute) }\n")], tmp_root)
+        finally:
+            TIMEOUT, GRACE = saved
+        if r["status"] != "timeout":
+            sys.exit("harness self-check failed: a slow but correct run was reported as %r" % r["status"])
     finally:
         shutil.rmtree(work, ignore_errors=True)
+
+def log_output(name, cp):
+    # MUTATION_LOG=<dir> guarda la salida completa de cada `go test` para diagnosticar.
+    d = os.environ.get("MUTATION_LOG")
+    if d:
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, name + ".log"), "w") as f:
+            f.write("exit %d\n--- stdout\n%s\n--- stderr\n%s\n" % (cp.returncode, cp.stdout, cp.stderr))
 
 def run_mutation(name, pairs, tmp_root):
     work = tempfile.mkdtemp(prefix="mut-", dir=tmp_root)
@@ -553,29 +644,50 @@ def run_mutation(name, pairs, tmp_root):
             open(p, "w").write(s.replace(old, new))
         pk = os.path.join(R, ".cache", "packages")
         env = dict(os.environ, FHIRPKG_PACKAGES=pk, EXAMPLES_PACKAGES=pk)
-        cmd, cwd = ["go", "test", "-failfast", "-count=1", "./..."], dst
+        cmd, cwd = ["go", "test", gotimeout(), "-vet=off", "-failfast", "-count=1", "./..."], dst
         if name.startswith("P-"):
             # Solo los oráculos de parity/ (otro módulo, con replace a ../../go-searchindex).
             os.symlink(os.path.join(os.path.dirname(R), "go-searchindex"), os.path.join(work, "go-searchindex"))
-            cmd = ["go", "test", "-short", "-count=1", "-run", "TestParityWithModels|TestSearchIndexDifferential|TestFHIRPathAnalyzeDifferential|TestKnownLoss|TestNormalizerParity|TestPathNameAgreesWithTheLibrary|TestProjectionParity|TestComparisonRejects", "./..."]
+            cmd = ["go", "test", gotimeout(), "-short", "-count=1", "-run", "TestParityWithModels|TestSearchIndexDifferential|TestFHIRPathAnalyzeDifferential|TestKnownLoss|TestNormalizerParity|TestPathNameAgreesWithTheLibrary|TestProjectionParity|TestComparisonRejects", "./..."]
             cwd = os.path.join(dst, "parity")
         if name.startswith("O-"):
-            return run_oracle_mutation(name, dst, work, env, pk)
+            try:
+                return run_oracle_mutation(name, dst, work, env, pk)
+            except subprocess.TimeoutExpired:
+                return timed_out(TIMEOUT)
         start = time.time()
+        hint = HINTS.get(name)
+        if hint and name[:2] not in ("P-", "O-"):
+            try:
+                hout = run_cmd(["go", "test", gotimeout(), "-vet=off", "-failfast", "-count=1", "-run", "^(" + "|".join(hint) + ")$", "./..."],
+                               cwd, env).stdout
+            except subprocess.TimeoutExpired:
+                hout = ""
+            hby = sorted(set(re.findall(r"^--- FAIL: (\S+)", hout, re.M)))
+            if hby and not name.startswith("PR-"):
+                return {"status": "detected", "by": hby, "secs": round(time.time() - start, 1)}
         try:
-            out = subprocess.run(cmd, cwd=cwd, env=env, capture_output=True, text=True, timeout=900).stdout
+            cp = run_cmd(cmd, cwd, env)
+            out = cp.stdout
+            log_output(name, cp)
+            if go_timed_out(out):
+                return timed_out(round(time.time() - start, 1))
         except subprocess.TimeoutExpired:
-            return {"status": "detected", "detail": "timeout (the mutation hangs a test)", "by": ["timeout"], "secs": 900}
+            return timed_out(TIMEOUT)
         secs = round(time.time() - start, 1)
         if "[build failed]" in out or "\n# " in "\n" + out and "cannot" in out and "--- FAIL" not in out:
             return {"status": "error", "detail": "does not compile: " + out.strip().splitlines()[0][:150]}
         by = sorted(set(re.findall(r"^--- FAIL: (\S+)", out, re.M)))
+        if not by and not passed(cp):
+            return {"status": "error", "detail": no_verdict(cp)}
         if by and not (name.startswith("PR-") and os.environ.get("MUTATION_PARITY_ALSO") == "1"):
             return {"status": "detected", "by": by, "secs": secs}
         if name.startswith("PR-"):
             # Plan 005 §13.4: lo que no ve el módulo raíz (o todo, con MUTATION_PARITY_ALSO=1)
             # lo debe ver la comparación exacta con el oráculo, sobre el corpus rápido.
             pby, psecs, perr = parity_fast(dst, work, env)
+            if perr == "timeout":
+                return timed_out(round(secs + psecs, 1))
             if perr:
                 return {"status": "error", "detail": perr}
             if pby or by:
@@ -590,12 +702,16 @@ def run_mutation(name, pairs, tmp_root):
         shutil.rmtree(work, ignore_errors=True)
 
 def main():
-    tmp_root = os.environ.get("TMPDIR", tempfile.gettempdir())
+    # Las copias del repo se crean en MUTATION_TMPDIR, o en TMPDIR, o en el directorio
+    # temporal del sistema (/var/folders en macOS): `TMPDIR=/Volumes/dev/tmp make mutations`.
+    tmp_root = os.environ.get("MUTATION_TMPDIR") or os.environ.get("TMPDIR") or tempfile.gettempdir()
+    print("mutation copies under", tmp_root, flush=True)
     harness_self_check(tmp_root)
     if "--self-check" in sys.argv:
         print("harness self-check: ok")
         return
     prefixes = sys.argv[1:]
+    HINTS.update(load_hints())
     names = [n for n in muts if not prefixes or any(n.startswith(p) for p in prefixes)]
     if not names:
         sys.exit("no mutation matches")
@@ -636,9 +752,13 @@ def main():
             by = ", ".join(r.get("by", [])[:4]) + (" ..." if len(r.get("by", [])) > 4 else "")
             ps = ("; parity %s s%s" % (r["parity_secs"], "" if r.get("parity_sees", True) else ", parity does not see it")) if "parity_secs" in r else ""
             f.write("| %s | %s%s | %s | %s%s |\n" % (n, r["status"], " (cached)" if r.get("cached") else "", by or r.get("detail", ""), r.get("secs", ""), ps))
-        f.write("\n%s\n" % ("All mutations detected." if not bad else "**Not detected or invalid: %s**" % ", ".join(bad)))
+        counts = {}
+        for n in names:
+            counts[results[n]["status"]] = counts.get(results[n]["status"], 0) + 1
+        f.write("\nBy status: %s.\n" % ", ".join("%s %d" % (k, counts[k]) for k in sorted(counts)))
+        f.write("\n%s\n" % ("All mutations detected." if not bad else "**Unresolved (not detected, invalid or timed out): %s**" % ", ".join(bad)))
     print(path)
     if bad:
-        sys.exit("not detected or invalid: " + ", ".join(bad))
+        sys.exit("unresolved (not detected, invalid or timed out): " + ", ".join(bad))
 
 main()

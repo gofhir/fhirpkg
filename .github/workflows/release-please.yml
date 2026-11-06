@@ -1,0 +1,33 @@
+name: Release Please
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# La configuración vive en release-please-config.json y
+# .release-please-manifest.json (modo manifiesto de release-please-action v4).
+# No se pasa `release-type` aquí a propósito: con ese input la acción ignora
+# los dos archivos y no se podría fijar la primera versión.
+#
+# Primera versión 0.1.0: el repo no tiene tags ni release previos, y sin
+# ayuda release-please parte de 1.0.0. Por eso el paquete «.» lleva
+# "release-as": "0.1.0" y el manifiesto está vacío. `bump-minor-pre-major`
+# hace que, antes de 1.0, un cambio incompatible suba el minor y no el major.
+# Tras fusionar el PR de ese primer release, QUITAR "release-as" de
+# release-please-config.json: mientras esté, cada release saldría como 0.1.0.
+# Fuente: docs de release-please (manifest-releaser.md, «release-as» y
+# «bump-minor-pre-major») y del README de release-please-action v4.
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: googleapis/release-please-action@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json

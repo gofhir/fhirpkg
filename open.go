@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 )
 
 // Package es un package leído de un lock.
@@ -80,14 +81,8 @@ func Open(lock Lock, dir string) (*Set, error) {
 			return nil, err
 		}
 		m := c.manifest
-		if id == lock.Core && !m.IsCore() {
-			return nil, fmt.Errorf("%s: the lock's core is not a core package (type %q)", id, m.Type)
-		}
-		if m.IsCore() && id != lock.Core {
-			return nil, fmt.Errorf("%s: a second core in the lock (the core is %s)", id, lock.Core)
-		}
-		if id != lock.Core && len(m.FHIRVersions) > 0 && !slices.Contains(m.Series(), coreSeries) && !exc[id] {
-			return nil, fmt.Errorf("%s: declares FHIR %v, not the core's series %s, and is not in the lock's exceptions", id, m.FHIRVersions, coreSeries)
+		if err := checkReadPackage(id, m, lock.Core, coreSeries, exc[id]); err != nil {
+			return nil, err
 		}
 		s.packages = append(s.packages, Package{ID: id, Manifest: m, SHA256: lp.SHA256})
 		s.resources[id] = c.resources
@@ -100,7 +95,7 @@ func Open(lock Lock, dir string) (*Set, error) {
 // validaciones, pero conserva solo el manifiesto: no guarda recursos.
 func readLocked(dir string, lp LockedPackage, excluded bool) (*contents, error) {
 	id := lp.ID()
-	data, err := os.ReadFile(filepath.Join(dir, PackageFile(lp.Name, lp.Version)))
+	data, err := os.ReadFile(filepath.Join(dir, PackageFile(lp.Name, lp.Version))) //nolint:gosec // G703: dir lo elige quien llama; el nombre del archivo sale de un lock ya validado (Lock.Validate)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("%s: %s is missing from %s (restore the file)", id, PackageFile(lp.Name, lp.Version), dir)
 	}
@@ -112,7 +107,6 @@ func readLocked(dir string, lp LockedPackage, excluded bool) (*contents, error) 
 		return nil, fmt.Errorf("%s: SHA-256 is %s, the lock pins %s", id, got, lp.SHA256)
 	}
 	c, err := scanTgz(data, DefaultLimits, !excluded)
-	data = nil // el .tgz ya no hace falta: solo se conservan los recursos
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", id, err)
 	}
@@ -137,7 +131,7 @@ func matchLocked(m Manifest, lp LockedPackage) error {
 	// cada una del manifiesto aparece en el lock (Validate ya rechaza repetidas).
 	locked := make(map[string]bool, len(lp.Dependencies))
 	for _, d := range lp.Dependencies {
-		name, version, _ := splitID(d)
+		name, version, _ := strings.Cut(d, "#")
 		locked[name] = true
 		spec, ok := m.Dependencies[name]
 		if !ok {
@@ -170,3 +164,18 @@ func (s *Set) Packages() []Package { return slices.Clone(s.packages) }
 // ordenados por archivo. El slice y sus bytes son del Set: no se modifican.
 // Un package que no se leyó (desconocido o excluido) no tiene recursos.
 func (s *Set) Resources(pkg string) []Resource { return s.resources[pkg] }
+
+// checkReadPackage comprueba el manifiesto de un package leído contra el lock:
+// el núcleo es el único núcleo, y quien declara otra serie está en las excepciones.
+func checkReadPackage(id string, m Manifest, lockCore, coreSeries string, excepted bool) error {
+	if id == lockCore && !m.IsCore() {
+		return fmt.Errorf("%s: the lock's core is not a core package (type %q)", id, m.Type)
+	}
+	if m.IsCore() && id != lockCore {
+		return fmt.Errorf("%s: a second core in the lock (the core is %s)", id, lockCore)
+	}
+	if id != lockCore && len(m.FHIRVersions) > 0 && !slices.Contains(m.Series(), coreSeries) && !excepted {
+		return fmt.Errorf("%s: declares FHIR %v, not the core's series %s, and is not in the lock's exceptions", id, m.FHIRVersions, coreSeries)
+	}
+	return nil
+}

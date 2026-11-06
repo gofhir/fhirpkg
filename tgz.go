@@ -63,9 +63,7 @@ func scanTgz(data []byte, lim Limits, withResources bool) (*contents, error) {
 	var (
 		out      contents
 		manifest []byte
-		total    int64
-		count    int
-		seen     = map[string]bool{}
+		scan     = tgzScan{lim: lim, seen: map[string]bool{}}
 	)
 	for {
 		h, err := tr.Next()
@@ -75,39 +73,15 @@ func scanTgz(data []byte, lim Limits, withResources bool) (*contents, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid tar: %w", err)
 		}
-		count++
-		if count > lim.MaxEntries {
-			return nil, fmt.Errorf("more than %d entries", lim.MaxEntries)
-		}
-		if err := checkEntryName(h.Name); err != nil {
+		skip, err := scan.admit(h)
+		if err != nil {
 			return nil, err
 		}
-		switch h.Typeflag {
-		case tar.TypeDir:
+		if skip {
 			continue
-		case tar.TypeReg:
-		default:
-			return nil, fmt.Errorf("entry %q: unsupported type %q (links and special files are not allowed)", h.Name, string(h.Typeflag))
 		}
-		if h.Size < 0 || h.Size > lim.MaxEntry {
-			return nil, fmt.Errorf("entry %q: size %d exceeds the %d-byte limit", h.Name, h.Size, lim.MaxEntry)
-		}
-		total += h.Size
-		if total > lim.MaxTotal {
-			return nil, fmt.Errorf("total size exceeds the %d-byte limit", lim.MaxTotal)
-		}
-		name := strings.TrimPrefix(h.Name, "./")
-		if seen[name] {
-			return nil, fmt.Errorf("duplicate entry %q", h.Name)
-		}
-		seen[name] = true
-		rest, ok := strings.CutPrefix(name, "package/")
-		if !ok || strings.Contains(rest, "/") {
-			continue // fuera de package/ o en una subcarpeta (ejemplos, other/): no se lee
-		}
-		isManifest := rest == "package.json"
-		isResource := withResources && strings.HasSuffix(rest, ".json") && !isManifest && !strings.HasPrefix(rest, ".")
-		if !isManifest && !isResource {
+		rest, isManifest, ok := selectEntry(h.Name, withResources)
+		if !ok {
 			continue
 		}
 		// Tamaño exacto: io.ReadAll deja capacidad de sobra, que se retendría.
@@ -119,24 +93,20 @@ func scanTgz(data []byte, lim Limits, withResources bool) (*contents, error) {
 			manifest = body
 			continue
 		}
-		var head struct {
-			ResourceType string `json:"resourceType"`
-			URL          string `json:"url"`
-			Version      string `json:"version"`
+		res, err := parseConformance(h.Name, rest, body)
+		if err != nil {
+			return nil, err
 		}
-		if err := json.Unmarshal(body, &head); err != nil {
-			return nil, fmt.Errorf("entry %q: invalid JSON: %w", h.Name, err)
-		}
-		if head.ResourceType == "" || head.URL == "" {
+		if res == nil {
 			out.skipped++
 			continue
 		}
-		out.resources = append(out.resources, Resource{File: rest, ResourceType: head.ResourceType, URL: head.URL, Version: head.Version, Raw: body})
+		out.resources = append(out.resources, *res)
 	}
 	// tar se detiene en los bloques de cierre sin leer el final del gzip: se
 	// drena para que se verifique su CRC y su largo (un gzip truncado es error).
-	if _, err := io.Copy(io.Discard, zr); err != nil {
-		return nil, fmt.Errorf("invalid gzip stream: %w", err)
+	if err := drainPadding(zr); err != nil {
+		return nil, err
 	}
 	if manifest == nil {
 		return nil, errors.New("package/package.json is missing")
@@ -148,6 +118,112 @@ func scanTgz(data []byte, lim Limits, withResources bool) (*contents, error) {
 	out.manifest = m
 	sort.Slice(out.resources, func(i, j int) bool { return out.resources[i].File < out.resources[j].File })
 	return &out, nil
+}
+
+// maxTrailingPadding acota lo que puede quedar en el gzip tras los bloques de
+// cierre del tar: el relleno a un múltiplo del tamaño de registro, que el
+// máximo de GNU tar (-b 255) deja en 127,5 KiB. Es el tope del drenaje, para que
+// un gzip hostil no obligue a descomprimir sin límite (gosec G110).
+const maxTrailingPadding = 128 << 10
+
+// drainPadding lee el resto del gzip hasta su final, para verificar el CRC y el
+// largo. Lo que sigue al tar debe ser relleno de ceros, de a lo sumo
+// maxTrailingPadding bytes; cualquier otra cosa es error.
+func drainPadding(zr io.Reader) error {
+	var (
+		buf   [4096]byte
+		total int
+	)
+	lr := io.LimitReader(zr, maxTrailingPadding+1)
+	for {
+		n, err := lr.Read(buf[:])
+		total += n
+		if total > maxTrailingPadding {
+			return errors.New("trailing data after the tar archive: more than the allowed padding")
+		}
+		for _, c := range buf[:n] {
+			if c != 0 {
+				return errors.New("trailing data after the tar archive: not zero padding")
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return fmt.Errorf("invalid gzip stream: %w", err)
+		}
+	}
+}
+
+// tgzScan lleva la cuenta de las validaciones que cruzan entradas: cantidad,
+// tamaño total y nombres repetidos.
+type tgzScan struct {
+	lim   Limits
+	total int64
+	count int
+	seen  map[string]bool
+}
+
+// admit valida la cabecera de una entrada (nombre, tipo, tamaño, límites y
+// duplicados). skip es true para los directorios, que no se leen.
+func (s *tgzScan) admit(h *tar.Header) (skip bool, err error) {
+	s.count++
+	if s.count > s.lim.MaxEntries {
+		return false, fmt.Errorf("more than %d entries", s.lim.MaxEntries)
+	}
+	if err := checkEntryName(h.Name); err != nil {
+		return false, err
+	}
+	switch h.Typeflag {
+	case tar.TypeDir:
+		return true, nil
+	case tar.TypeReg:
+	default:
+		return false, fmt.Errorf("entry %q: unsupported type %q (links and special files are not allowed)", h.Name, string(h.Typeflag))
+	}
+	if h.Size < 0 || h.Size > s.lim.MaxEntry {
+		return false, fmt.Errorf("entry %q: size %d exceeds the %d-byte limit", h.Name, h.Size, s.lim.MaxEntry)
+	}
+	s.total += h.Size
+	if s.total > s.lim.MaxTotal {
+		return false, fmt.Errorf("total size exceeds the %d-byte limit", s.lim.MaxTotal)
+	}
+	name := strings.TrimPrefix(h.Name, "./")
+	if s.seen[name] {
+		return false, fmt.Errorf("duplicate entry %q", h.Name)
+	}
+	s.seen[name] = true
+	return false, nil
+}
+
+// selectEntry decide si una entrada se lee: el manifiesto, o con withResources
+// un JSON de primer nivel de package/. rest es su nombre dentro de package/.
+func selectEntry(entryName string, withResources bool) (rest string, isManifest, ok bool) {
+	name := strings.TrimPrefix(entryName, "./")
+	rest, ok = strings.CutPrefix(name, "package/")
+	if !ok || strings.Contains(rest, "/") {
+		return "", false, false // fuera de package/ o en una subcarpeta (ejemplos, other/): no se lee
+	}
+	isManifest = rest == "package.json"
+	isResource := withResources && strings.HasSuffix(rest, ".json") && !isManifest && !strings.HasPrefix(rest, ".")
+	return rest, isManifest, isManifest || isResource
+}
+
+// parseConformance lee la cabecera de un JSON de primer nivel; devuelve nil si no es
+// un recurso de conformidad (sin resourceType o sin url).
+func parseConformance(entryName, file string, body []byte) (*Resource, error) {
+	var head struct {
+		ResourceType string `json:"resourceType"`
+		URL          string `json:"url"`
+		Version      string `json:"version"`
+	}
+	if err := json.Unmarshal(body, &head); err != nil {
+		return nil, fmt.Errorf("entry %q: invalid JSON: %w", entryName, err)
+	}
+	if head.ResourceType == "" || head.URL == "" {
+		return nil, nil
+	}
+	return &Resource{File: file, ResourceType: head.ResourceType, URL: head.URL, Version: head.Version, Raw: body}, nil
 }
 
 // checkEntryName rechaza los nombres que escaparían de la carpeta de

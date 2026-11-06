@@ -60,7 +60,7 @@ func (r *HTTPRegistry) client() *http.Client {
 }
 
 func (r *HTTPRegistry) get(ctx context.Context, u string, limit int64) ([]byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

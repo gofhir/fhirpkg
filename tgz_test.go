@@ -246,3 +246,61 @@ func TestScanWithoutResourcesStillValidatesTheWholeTgz(t *testing.T) {
 		t.Fatal("a package without package.json was accepted")
 	}
 }
+
+// buildTgzWithTrailer arma un .tgz válido y le agrega bytes tras los bloques de
+// cierre del tar, dentro del mismo flujo gzip.
+func buildTgzWithTrailer(t *testing.T, manifest string, trailer []byte) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(zw)
+	if err := tw.WriteHeader(&tar.Header{Name: "package/package.json", Typeflag: tar.TypeReg, Mode: 0o644, Size: int64(len(manifest))}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tw.Write([]byte(manifest)); err != nil {
+		t.Fatal(err)
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := zw.Write(trailer); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+// El final del gzip tras el tar es relleno de ceros acotado (gosec G110): hasta
+// maxTrailingPadding se acepta, lo que lo supera o no es cero es error. Se prueba
+// con el manifiesto de cada serie (R4, R4B, R5): el límite no depende de la versión.
+func TestScanTgzTrailingDataAfterTar(t *testing.T) {
+	for _, v := range []string{"4.0.1", "4.3.0", "5.0.0"} {
+		manifest := `{"name":"p","version":"1.0.0","fhirVersions":["` + v + `"]}`
+		zeros := func(n int) []byte { return make([]byte, n) }
+		ok := map[string][]byte{
+			"none":            nil,
+			"one record":      zeros(10240),
+			"exactly the cap": zeros(maxTrailingPadding),
+		}
+		for name, tr := range ok {
+			if _, err := scanTgz(buildTgzWithTrailer(t, manifest, tr), DefaultLimits, true); err != nil {
+				t.Errorf("%s %s: %v", v, name, err)
+			}
+		}
+		bad := map[string][]byte{
+			"one over the cap":   zeros(maxTrailingPadding + 1),
+			"ten times the cap":  zeros(10 * maxTrailingPadding),
+			"a byte of data":     append(zeros(100), 'x'),
+			"data at the start":  []byte("PK\x03\x04"),
+			"data after the cap": append(zeros(maxTrailingPadding), 'x'),
+		}
+		for name, tr := range bad {
+			_, err := scanTgz(buildTgzWithTrailer(t, manifest, tr), DefaultLimits, true)
+			if err == nil || !strings.Contains(err.Error(), "trailing data after the tar archive") {
+				t.Errorf("%s %s: %v", v, name, err)
+			}
+		}
+	}
+}

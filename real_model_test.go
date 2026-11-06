@@ -180,7 +180,7 @@ func TestRealModelOracle(t *testing.T) {
 			m := c.Model()
 			name, version, _ := strings.Cut(c.set.lock.Core, "#")
 			start := time.Now()
-			out, err := exec.Command(py, "-I", filepath.Join("scripts", "model_oracle.py"), filepath.Join(dir, name+"-"+version+".tgz")).Output()
+			out, err := exec.CommandContext(t.Context(), py, "-I", filepath.Join("scripts", "model_oracle.py"), filepath.Join(dir, name+"-"+version+".tgz")).Output()
 			if err != nil {
 				t.Fatalf("model_oracle.py: %v", err)
 			}
@@ -301,7 +301,7 @@ func TestRealSummaryCounts(t *testing.T) {
 		t.Run(rc.name, func(t *testing.T) {
 			c, _ := realContext(t, rc.lock)
 			name, version, _ := strings.Cut(c.set.lock.Core, "#")
-			out, err := exec.Command(py, "-I", filepath.Join("scripts", "model_oracle.py"), filepath.Join(dir, name+"-"+version+".tgz"), "--counts").Output()
+			out, err := exec.CommandContext(t.Context(), py, "-I", filepath.Join("scripts", "model_oracle.py"), filepath.Join(dir, name+"-"+version+".tgz"), "--counts").Output()
 			if err != nil {
 				t.Fatalf("model_oracle.py --counts: %v", err)
 			}

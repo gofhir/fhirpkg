@@ -63,73 +63,17 @@ func Explore(ctx context.Context, roots []string, reg Registry, onPackage func(i
 	}
 	sorted := append([]string(nil), roots...)
 	sort.Strings(sorted)
-	g := &Graph{Nodes: map[string]*Node{}}
-	var queue []string
-	versions := map[string][]string{}
-
-	request := func(from, name, spec string) (string, error) {
-		vs, err := parseSpec(spec)
-		if err != nil {
-			if from == "" {
-				return "", fmt.Errorf("root %s#%s: %w", name, spec, err)
-			}
-			return "", fmt.Errorf("%s depends on %s: %w", from, name, err)
-		}
-		version := vs.exact
-		if vs.wildcard {
-			avail, ok := versions[name]
-			if !ok {
-				avail, err = reg.Versions(ctx, name)
-				if err != nil {
-					return "", fmt.Errorf("%s: listing versions of %s for %q: %w", orRoot(from), name, spec, err)
-				}
-				versions[name] = avail
-			}
-			v, ok := vs.pick(avail)
-			if !ok {
-				return "", fmt.Errorf("%s: no published version of %s matches %q", orRoot(from), name, spec)
-			}
-			version = v
-		}
-		id := name + "#" + version
-		n := g.Nodes[id]
-		if n == nil {
-			n = &Node{ID: id}
-			if from != "" {
-				n.Via = append(append([]string(nil), g.Nodes[from].Via...), from)
-			}
-			g.Nodes[id] = n
-			queue = append(queue, id)
-		}
-		n.Requests = append(n.Requests, Request{From: from, Spec: spec})
-		return id, nil
+	x := &explorer{ctx: ctx, reg: reg, g: &Graph{Nodes: map[string]*Node{}}, versions: map[string][]string{}}
+	g := x.g
+	if err := x.addRoots(sorted); err != nil {
+		return nil, err
 	}
 
-	seenRoot := map[string]bool{}
-	for i, r := range sorted {
-		if i > 0 && r == sorted[i-1] {
-			continue
-		}
-		name, spec, err := splitID(r)
-		if err != nil {
-			return nil, err
-		}
-		id, err := request("", name, spec)
-		if err != nil {
-			return nil, err
-		}
-		if !seenRoot[id] {
-			seenRoot[id] = true
-			g.Roots = append(g.Roots, id)
-		}
-	}
-	sort.Strings(g.Roots)
-
-	for len(queue) > 0 {
-		id := queue[0]
-		queue = queue[1:]
+	for len(x.queue) > 0 {
+		id := x.queue[0]
+		x.queue = x.queue[1:]
 		n := g.Nodes[id]
-		name, version, _ := splitID(id)
+		name, version, _ := strings.Cut(id, "#")
 		tgz, err := reg.Fetch(ctx, name, version)
 		if err != nil {
 			return nil, fmt.Errorf("%s (requested by %s): %w", id, orRoot(n.Requests[0].From), err)
@@ -155,7 +99,7 @@ func Explore(ctx context.Context, roots []string, reg Registry, onPackage func(i
 		}
 		sort.Strings(deps)
 		for _, d := range deps {
-			did, err := request(id, d, c.manifest.Dependencies[d])
+			did, err := x.request(id, d, c.manifest.Dependencies[d])
 			if err != nil {
 				return nil, err
 			}
@@ -164,6 +108,82 @@ func Explore(ctx context.Context, roots []string, reg Registry, onPackage func(i
 		sort.Strings(n.Deps)
 	}
 	return g, nil
+}
+
+// explorer lleva el estado del recorrido en anchura de Explore: la cola de
+// packages por leer y las versiones publicadas ya consultadas por nombre.
+type explorer struct {
+	ctx      context.Context
+	reg      Registry
+	g        *Graph
+	queue    []string
+	versions map[string][]string
+}
+
+// addRoots pide cada raíz (ya ordenada) una sola vez y deja g.Roots ordenado.
+func (x *explorer) addRoots(sorted []string) error {
+	g := x.g
+	seenRoot := map[string]bool{}
+	for i, r := range sorted {
+		if i > 0 && r == sorted[i-1] {
+			continue
+		}
+		name, spec, err := splitID(r)
+		if err != nil {
+			return err
+		}
+		id, err := x.request("", name, spec)
+		if err != nil {
+			return err
+		}
+		if !seenRoot[id] {
+			seenRoot[id] = true
+			g.Roots = append(g.Roots, id)
+		}
+	}
+	sort.Strings(g.Roots)
+	return nil
+}
+
+// request registra que from pide name en la versión spec (exacta o con comodín),
+// crea el nodo si es nuevo y devuelve su id.
+func (x *explorer) request(from, name, spec string) (string, error) {
+	g := x.g
+	vs, err := parseSpec(spec)
+	if err != nil {
+		if from == "" {
+			return "", fmt.Errorf("root %s#%s: %w", name, spec, err)
+		}
+		return "", fmt.Errorf("%s depends on %s: %w", from, name, err)
+	}
+	version := vs.exact
+	if vs.wildcard {
+		avail, ok := x.versions[name]
+		if !ok {
+			avail, err = x.reg.Versions(x.ctx, name)
+			if err != nil {
+				return "", fmt.Errorf("%s: listing versions of %s for %q: %w", orRoot(from), name, spec, err)
+			}
+			x.versions[name] = avail
+		}
+		v, ok := vs.pick(avail)
+		if !ok {
+			return "", fmt.Errorf("%s: no published version of %s matches %q", orRoot(from), name, spec)
+		}
+		version = v
+	}
+	id := name + "#" + version
+	n := g.Nodes[id]
+	if n == nil {
+		n = &Node{ID: id}
+		if from != "" {
+			n.Via = append(append([]string(nil), g.Nodes[from].Via...), from)
+		}
+		g.Nodes[id] = n
+		x.queue = append(x.queue, id)
+	}
+	n.Requests = append(n.Requests, Request{From: from, Spec: spec})
+	return id, nil
 }
 
 func orRoot(from string) string {
@@ -214,7 +234,15 @@ type Analysis struct {
 func (g *Graph) Analyze() Analysis {
 	var a Analysis
 	ids := g.IDs()
+	g.analyzeCore(&a)
+	g.classifyPackages(&a, ids)
+	a.Doubles = g.doubles(ids)
+	a.Cycle = g.cycle()
+	return a
+}
 
+// analyzeCore fija el núcleo declarado entre las raíces, o deja el problema.
+func (g *Graph) analyzeCore(a *Analysis) {
 	var rootCores []string
 	for _, r := range g.Roots {
 		if g.Nodes[r].Manifest.IsCore() {
@@ -239,7 +267,11 @@ func (g *Graph) Analyze() Analysis {
 	default:
 		a.Problems = append(a.Problems, fmt.Sprintf("several roots are core packages (%s): the lock has exactly one core", strings.Join(rootCores, ", ")))
 	}
+}
 
+// classifyPackages reparte los packages en sin versión declarada, núcleos de
+// otra serie o de la misma, y los que declaran solo otras series.
+func (g *Graph) classifyPackages(a *Analysis, ids []string) {
 	for _, id := range ids {
 		n := g.Nodes[id]
 		if len(n.Manifest.FHIRVersions) == 0 && !n.Manifest.IsCore() {
@@ -261,11 +293,14 @@ func (g *Graph) Analyze() Analysis {
 			a.Foreign = append(a.Foreign, id)
 		}
 	}
+}
 
+// doubles agrupa los packages pedidos en más de una versión (D2).
+func (g *Graph) doubles(ids []string) []Double {
 	byName := map[string]map[string][]string{}
 	for _, id := range ids {
 		n := g.Nodes[id]
-		name, version, _ := splitID(id)
+		name, version, _ := strings.Cut(id, "#")
 		if byName[name] == nil {
 			byName[name] = map[string][]string{}
 		}
@@ -282,6 +317,7 @@ func (g *Graph) Analyze() Analysis {
 		names = append(names, n)
 	}
 	sort.Strings(names)
+	var out []Double
 	for _, name := range names {
 		if len(byName[name]) < 2 {
 			continue
@@ -292,10 +328,9 @@ func (g *Graph) Analyze() Analysis {
 			d.Versions = append(d.Versions, DoubleVersion{Version: v, RequestedBy: by})
 		}
 		sort.Slice(d.Versions, func(i, j int) bool { return d.Versions[i].Version < d.Versions[j].Version })
-		a.Doubles = append(a.Doubles, d)
+		out = append(out, d)
 	}
-	a.Cycle = g.cycle()
-	return a
+	return out
 }
 
 func contains(s []string, v string) bool {

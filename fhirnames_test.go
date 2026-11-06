@@ -134,7 +134,7 @@ func words(v string) []string {
 	var out []string
 	v = verbs.ReplaceAllString(v, " ")
 	for _, w := range strings.FieldsFunc(v, func(r rune) bool {
-		return !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '-' || r == '_')
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-' && r != '_'
 	}) {
 		if strings.ContainsFunc(w, func(r rune) bool { return unicode.IsLetter(r) || unicode.IsDigit(r) }) {
 			out = append(out, w)
@@ -260,7 +260,7 @@ func sourceViolations(t testing.TB, name string, src []byte, forbidden map[strin
 		default:
 			// Una sola pieza (con o sin espacios alrededor o verbos de formato):
 			// debe estar en la lista de formato.
-			if !formatLiterals[l.Value] && !(len(ws) == 1 && formatLiterals[strconv.Quote(ws[0])] && strings.TrimSpace(v) == v && !strings.Contains(v, "%")) {
+			if !formatLiterals[l.Value] && (len(ws) != 1 || !formatLiterals[strconv.Quote(ws[0])] || strings.TrimSpace(v) != v || strings.Contains(v, "%")) {
 				out = append(out, lit{fs.Position(l.Pos()).String(), l.Value})
 			}
 		}

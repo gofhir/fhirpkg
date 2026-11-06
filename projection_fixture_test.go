@@ -98,7 +98,7 @@ func projFixture(v modelVersion) []string {
 		for i, e := range els {
 			m, ok := e.(map[string]any)
 			if !ok {
-				m = map[string]any(e.(map[string]any))
+				m = e.(map[string]any)
 			}
 			sum, mod := projFlags(v, m["path"].(string))
 			m["isSummary"], m["isModifier"] = sum, mod

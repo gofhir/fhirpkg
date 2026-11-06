@@ -758,7 +758,8 @@ func TestModelTypesAndPaths(t *testing.T) {
 // El modelo no guarda más de lo que usa: el mismo Context da el mismo Model.
 func TestContextModelIsBuiltOnce(t *testing.T) {
 	c := buildModelFixture(t, modelVersions[1])
-	if c.Model() != c.Model() || !reflect.DeepEqual(c.Model().Types(), c.Model().Types()) {
+	m1, m2 := c.Model(), c.Model() // la identidad: Model() no construye uno nuevo por llamada
+	if m1 != m2 || !reflect.DeepEqual(c.Model().Types(), c.Model().Types()) {
 		t.Error("Model() builds a new model on each call")
 	}
 }

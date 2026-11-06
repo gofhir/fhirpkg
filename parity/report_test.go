@@ -7,12 +7,13 @@ package parity
 
 import (
 	"fmt"
-	"github.com/gofhir/fhirpkg"
 	"os"
 	"sort"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/gofhir/fhirpkg"
 )
 
 var (

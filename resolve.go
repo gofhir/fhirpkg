@@ -34,58 +34,11 @@ func Resolve(ctx context.Context, roots []string, reg Registry, opts Options) (L
 
 func resolveGraph(g *Graph, opts Options) (Lock, error) {
 	a := g.Analyze()
-	// Los errores salen en un orden fijo: ciclo, versiones dobles, núcleo,
-	// series.
-	if len(a.Cycle) > 0 {
-		return Lock{}, fmt.Errorf("dependency cycle: %s", strings.Join(a.Cycle, " -> "))
+	if err := checkAnalysis(a); err != nil {
+		return Lock{}, err
 	}
-	if len(a.Doubles) > 0 {
-		return Lock{}, doubleError(a.Doubles)
-	}
-	if len(a.Problems) > 0 {
-		return Lock{}, fmt.Errorf("%s", strings.Join(a.Problems, "; "))
-	}
-	if len(a.SameSeriesCores) > 0 {
-		return Lock{}, fmt.Errorf("the graph has another core of the same FHIR series (%s) as %s: %s", a.Series, a.Core, strings.Join(a.SameSeriesCores, ", "))
-	}
-
-	exc := map[string]string{}
-	for _, e := range opts.Exceptions {
-		if _, _, err := splitID(e.Package); err != nil {
-			return Lock{}, fmt.Errorf("exception: %w", err)
-		}
-		if e.Reason == "" {
-			return Lock{}, fmt.Errorf("exception for %s has no reason", e.Package)
-		}
-		if _, dup := exc[e.Package]; dup {
-			return Lock{}, fmt.Errorf("two exceptions for %s", e.Package)
-		}
-		exc[e.Package] = e.Reason
-	}
-	used := map[string]bool{}
-	var missing []string
-	for _, id := range a.Foreign {
-		if _, ok := exc[id]; ok {
-			used[id] = true
-			continue
-		}
-		n := g.Nodes[id]
-		missing = append(missing, fmt.Sprintf("%s declares FHIR %v, not the core's series %s (reached through %s)",
-			id, n.Manifest.FHIRVersions, a.Series, viaText(n)))
-	}
-	if len(missing) > 0 {
-		return Lock{}, fmt.Errorf("packages of another FHIR series than %s %s:\n  %s\nchange the roots or add an exception with its reason",
-			a.Core, a.FHIRVersion, strings.Join(missing, "\n  "))
-	}
-	var unused []string
-	for _, e := range opts.Exceptions {
-		if !used[e.Package] {
-			unused = append(unused, e.Package)
-		}
-	}
-	if len(unused) > 0 {
-		sort.Strings(unused)
-		return Lock{}, fmt.Errorf("exceptions that no package needs: %s", strings.Join(unused, ", "))
+	if err := checkExceptions(g, a, opts); err != nil {
+		return Lock{}, err
 	}
 
 	excluded := map[string]bool{}
@@ -118,6 +71,68 @@ func resolveGraph(g *Graph, opts Options) (Lock, error) {
 		return Lock{}, fmt.Errorf("internal error: %w", err)
 	}
 	return l, nil
+}
+
+// checkAnalysis falla con el primer problema del análisis. Los errores salen en
+// un orden fijo: ciclo, versiones dobles, núcleo, series.
+func checkAnalysis(a Analysis) error {
+	if len(a.Cycle) > 0 {
+		return fmt.Errorf("dependency cycle: %s", strings.Join(a.Cycle, " -> "))
+	}
+	if len(a.Doubles) > 0 {
+		return doubleError(a.Doubles)
+	}
+	if len(a.Problems) > 0 {
+		return fmt.Errorf("%s", strings.Join(a.Problems, "; "))
+	}
+	if len(a.SameSeriesCores) > 0 {
+		return fmt.Errorf("the graph has another core of the same FHIR series (%s) as %s: %s", a.Series, a.Core, strings.Join(a.SameSeriesCores, ", "))
+	}
+	return nil
+}
+
+// checkExceptions valida las excepciones y exige que cubran, exactamente, los
+// packages de otra serie: ni uno sin excepción ni una excepción sin uso.
+func checkExceptions(g *Graph, a Analysis, opts Options) error {
+	exc := map[string]string{}
+	for _, e := range opts.Exceptions {
+		if _, _, err := splitID(e.Package); err != nil {
+			return fmt.Errorf("exception: %w", err)
+		}
+		if e.Reason == "" {
+			return fmt.Errorf("exception for %s has no reason", e.Package)
+		}
+		if _, dup := exc[e.Package]; dup {
+			return fmt.Errorf("two exceptions for %s", e.Package)
+		}
+		exc[e.Package] = e.Reason
+	}
+	used := map[string]bool{}
+	var missing []string
+	for _, id := range a.Foreign {
+		if _, ok := exc[id]; ok {
+			used[id] = true
+			continue
+		}
+		n := g.Nodes[id]
+		missing = append(missing, fmt.Sprintf("%s declares FHIR %v, not the core's series %s (reached through %s)",
+			id, n.Manifest.FHIRVersions, a.Series, viaText(n)))
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("packages of another FHIR series than %s %s:\n  %s\nchange the roots or add an exception with its reason",
+			a.Core, a.FHIRVersion, strings.Join(missing, "\n  "))
+	}
+	var unused []string
+	for _, e := range opts.Exceptions {
+		if !used[e.Package] {
+			unused = append(unused, e.Package)
+		}
+	}
+	if len(unused) > 0 {
+		sort.Strings(unused)
+		return fmt.Errorf("exceptions that no package needs: %s", strings.Join(unused, ", "))
+	}
+	return nil
 }
 
 func viaText(n *Node) string {
